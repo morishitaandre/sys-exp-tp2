@@ -144,7 +144,10 @@ UPROGS=\
 	$U/_mutest2\
 	$U/_rocky\
 	$U/_watchdog-panic\
-
+	$U/_sbrk-dealloc\
+	$U/_suicide\
+	$U/_rwtest\
+	$U/_naivefib\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

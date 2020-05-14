@@ -35,5 +35,7 @@ kfree(void *pa)
 void *
 kalloc(void)
 {
-  return bd_malloc(PGSIZE);
+  char* mem = bd_malloc(PGSIZE);
+  if(mem) memset(mem, 0, PGSIZE);
+  return mem;
 }

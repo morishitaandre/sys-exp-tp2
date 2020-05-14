@@ -32,31 +32,47 @@ exec(char *path, char **argv)
   ilock(ip);
 
   // Check ELF header
-  if(readi(ip, 0, (uint64)&elf, 0, sizeof(elf)) != sizeof(elf))
+  if(readi(ip, 0, (uint64)&elf, 0, sizeof(elf)) != sizeof(elf)){
+    printf("exec: readi error\n");
     goto bad;
-  if(elf.magic != ELF_MAGIC)
+  }
+  if(elf.magic != ELF_MAGIC){
+    printf("exec: bad number error\n");
     goto bad;
-
-  if((pagetable = proc_pagetable(p)) == 0)
+  }
+  if((pagetable = proc_pagetable(p)) == 0){
+    printf("exec: proc_pagetable error\n");
     goto bad;
+  }
 
   // Load program into memory.
   sz = 0;
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
-    if(readi(ip, 0, (uint64)&ph, off, sizeof(ph)) != sizeof(ph))
-      goto bad;
+    if(readi(ip, 0, (uint64)&ph, off, sizeof(ph)) != sizeof(ph)){
+      printf("exec: program header error\n");
+    }
     if(ph.type != ELF_PROG_LOAD)
       continue;
-    if(ph.memsz < ph.filesz)
+    if(ph.memsz < ph.filesz){
+      printf("exec: program header memsz < filesz\n");
       goto bad;
-    if(ph.vaddr + ph.memsz < ph.vaddr)
+    }
+    if(ph.vaddr + ph.memsz < ph.vaddr){
+      printf("exec: program header vaddr + memsz < vaddr\n");
       goto bad;
-    if((sz = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz)) == 0)
+    }
+    if((sz = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz)) == 0){
+      printf("exec: uvmalloc failed\n");
       goto bad;
-    if(ph.vaddr % PGSIZE != 0)
+    }
+    if(ph.vaddr % PGSIZE != 0){
+      printf("exec: vaddr not page aligned\n");
       goto bad;
-    if(loadseg(pagetable, ph.vaddr, ip, ph.off, ph.filesz) < 0)
+    }
+    if(loadseg(pagetable, ph.vaddr, ip, ph.off, ph.filesz) < 0){
+      printf("exec: loadseg failed\n");
       goto bad;
+    }
   }
   iunlockput(ip);
   end_op(ROOTDEV);
@@ -68,22 +84,30 @@ exec(char *path, char **argv)
   // Allocate two pages at the next page boundary.
   // Use the second as the user stack.
   sz = PGROUNDUP(sz);
-  if((sz = uvmalloc(pagetable, sz, sz + 2*PGSIZE)) == 0)
+  if((sz = uvmalloc(pagetable, sz, sz + 2*PGSIZE)) == 0){
+    printf("exec: uvmalloc failed for the stack\n");
     goto bad;
+  }
   uvmclear(pagetable, sz-2*PGSIZE);
   sp = sz;
   stackbase = sp - PGSIZE;
 
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
-    if(argc >= MAXARG)
+    if(argc >= MAXARG){
+      printf("exec: too many args\n");
       goto bad;
+    }
     sp -= strlen(argv[argc]) + 1;
     sp -= sp % 16; // riscv sp must be 16-byte aligned
-    if(sp < stackbase)
+    if(sp < stackbase){
+      printf("exec: sp < stackbase\n");
       goto bad;
-    if(copyout(pagetable, sp, argv[argc], strlen(argv[argc]) + 1) < 0)
+    }
+    if(copyout(pagetable, sp, argv[argc], strlen(argv[argc]) + 1) < 0){
+      printf("exec: copy argument strings failed\n");
       goto bad;
+    }
     ustack[argc] = sp;
   }
   ustack[argc] = 0;
@@ -91,10 +115,14 @@ exec(char *path, char **argv)
   // push the array of argv[] pointers.
   sp -= (argc+1) * sizeof(uint64);
   sp -= sp % 16;
-  if(sp < stackbase)
+  if(sp < stackbase){
+    printf("exec: sp < stackbase, le retour\n");
     goto bad;
-  if(copyout(pagetable, sp, (char *)ustack, (argc+1)*sizeof(uint64)) < 0)
+  }
+  if(copyout(pagetable, sp, (char *)ustack, (argc+1)*sizeof(uint64)) < 0){
+    printf("exec: copy argument pointers failed\n");
     goto bad;
+  }
 
   // arguments to user main(argc, argv)
   // argc is returned via the system call return

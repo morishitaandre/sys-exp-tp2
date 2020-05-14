@@ -28,7 +28,23 @@ initlock(struct spinlock *lk, char *name)
   nlock++;
 }
 
-#define MAXTRIES 100000
+
+void dump_locks(void){
+  printf_no_lock("LID\tLOCKED\tCPU\tPID\tNAME\t\tPC\n");
+  for(int i = 0; i < nlock; i++){
+    if(locks[i]->locked)
+      printf_no_lock("%d\t%d\t%d\t%d\t%s\t\t%p\n",
+                     i,
+                     locks[i]->locked,
+                     locks[i]->cpu - cpus,
+                     locks[i]->pid,
+                     locks[i]->name,
+                     locks[i]->pc
+        );
+  }
+}
+
+#define MAXTRIES 2000000
 
 // Acquire the lock.
 // Loops (spins) until the lock is acquired.

@@ -33,6 +33,31 @@ trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
+int handle_page_fault(struct proc* p, uint64 scause, uint64 stval, uint64 sepc){
+  uint64 addr = PGROUNDDOWN(stval);
+  acquire(&p->vma_lock);
+  int flags = allocate_if_possible(p->pagetable, p, addr);
+  release(&p->vma_lock);
+  if(flags < 0){
+    if(flags == ENOVMA){
+      printf("Could not find VMA associated with addr=%p\n", addr);
+    } else if (flags == ENOMEM){
+      printf("No more memory could be allocated from the kernel\n");
+    } else if (flags == ENOFILE){
+      printf("Could not read file associated with memory area\n");
+    } else if (flags == EMAPFAILED){
+      printf("mappages failed for an unknown reason\n");
+    }
+
+    proc_vmprint(p);
+    printf("unrecoverable page fault by pid=%d at sepc=%p stval=%p scause=%x\n",
+           p->pid, sepc, stval, scause);
+    p->killed = 1;
+    return -1;
+  }
+  return 0;
+}
+
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
@@ -53,8 +78,10 @@ usertrap(void)
   
   // save user program counter.
   p->tf->epc = r_sepc();
-  
-  if(r_scause() == 8){
+
+  uint64 scause = r_scause();
+
+  if(scause == 8){
     // system call
 
     if(p->killed)
@@ -69,6 +96,8 @@ usertrap(void)
     intr_on();
 
     syscall();
+  } else if (scause == 0xf || scause == 0xd) {
+    handle_page_fault(p, scause, r_stval(), r_sepc());
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {

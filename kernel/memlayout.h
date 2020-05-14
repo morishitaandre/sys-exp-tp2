@@ -70,4 +70,10 @@
 //   TRAMPOLINE (the same page as in the kernel)
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)
 
+#define HEAP_THRESHOLD (8*1024*1024)
+
+#define USTACK_BOTTOM (256*1024*1024)
+#define USTACK_LIMIT (4 * 1024)
+#define USTACK_TOP (USTACK_BOTTOM + USTACK_LIMIT)
+
 #endif

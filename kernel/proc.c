@@ -14,7 +14,7 @@ struct cpu cpus[NCPU];
 struct proc proc[NPROC];
 
 struct list_proc* prio[NPRIO];
-struct spinlock prio_lock;
+struct spinlock prio_lock[NPRIO];
 
 struct proc *initproc;
 
@@ -26,60 +26,131 @@ static void wakeup1(struct proc *chan);
 
 extern char trampoline[]; // trampoline.S
 
-/* Solution insert et remove
-
-// Needs lock on p and prio_lock[p->priority]
-void insert_into_prio_queue(struct proc* p){
-  struct list_proc* new = bd_malloc(sizeof(struct list_proc));
-  new->next = 0;
-  new->p = p;
-  if(!prio[p->priority]){
-    prio[p->priority] = new;
-  }
-  else {
-    struct list_proc* last = prio[p->priority];
-    while(last && last->next){
-      last = last->next;
-    }
-    last->next = new;
-  }
-}
-
-// Needs lock on p and prio_lock[p->priority]
-void remove_from_prio_queue(struct proc* p){
-  struct list_proc* old = prio[p->priority];
-  struct list_proc* prev = 0;
-  struct list_proc* head = old;
-
-  while(old){
-    if(old->p == p) {
-      if(old == head){
-        head = old->next;
-      } else {
-        prev->next = old->next;
-      }
-      bd_free(old);
-      break;
-    }
-    prev = old;
-    old = old->next;
-  }
-
-  prio[p->priority] = head;
-}
+/* Ajoute une VMA à la liste de VMAs d'un processus.
+ * Prend le début et la fin de la VMA en paramètre.
+ * Retourne un pointeur vers la nouvelle entrée.
  */
+struct vma* add_memory_area(struct proc* p,
+                            uint64 va_begin,
+                            uint64 va_end){
+  acquire(&p->vma_lock);
+  struct vma* entry = bd_malloc(sizeof(struct vma));
+  if(!entry){
+    panic("bd_malloc failed\n");
+  }
+  entry->va_begin = va_begin;
+  entry->va_end = va_end;
+  entry->next = p->memory_areas;
+  entry->file = 0;
+  entry->vma_flags = 0;
+  entry->file_offset = 0;
+  entry->file_nbytes = 0;
+  p->memory_areas = entry;
+  release(&p->vma_lock);
+  return entry;
+}
+
+/* Libère une liste de VMAs. Suppose qu'on tient un verrou sur cette liste. */
+void free_vma(struct vma* vmas){
+  struct vma* ma = vmas;
+  while(ma){
+    struct vma* old = ma;
+    ma = ma -> next;
+    bd_free(old);
+  }
+}
+
+/* Récupère la VMA associée à une adresse virtuelle, ou 0 si aucune VMA n'est
+ * associée à cette adresse.
+ * Nécessite que le verrou p->vma_lock soit tenu.
+ */
+struct vma* get_memory_area(struct proc* p, uint64 va){
+  if(!holding(&p->vma_lock)){
+    panic("get_memory_area: should hold vma_lock!\n");
+  }
+  struct vma* ma = p->memory_areas;
+  while(ma){
+    if (ma->va_begin <= va && va < ma->va_end){
+      return ma;
+    }
+    ma = ma -> next;
+  }
+  return 0;
+}
+
+/* Retourne l'adresse maximale utilisée par l'ensemble des VMAs. */
+uint64 max_addr_in_memory_areas(struct proc* p){
+  acquire(&p->vma_lock);
+  struct vma* ma = p->memory_areas;
+  uint64 max = 0;
+  while(ma){
+    if (ma->va_end > max) max =  ma->va_end;
+    ma = ma->next;
+  }
+  release(&p->vma_lock);
+  return max;
+}
+
+/* Affiche une VMA. */
+void print_memory_area(struct proc* p, struct vma* ma){
+  printf("VA = [%p; %p[ RWX=%d%d%d",
+         ma->va_begin, ma->va_end,
+         (ma->vma_flags & VMA_R) != 0,
+         (ma->vma_flags & VMA_W) != 0,
+         (ma->vma_flags & VMA_X) != 0
+    );
+  if(ma->file){
+    printf(" file=%s off=0x%x n=0x%x", ma->file, ma->file_offset, ma->file_nbytes);
+  }
+  if(ma == p->stack_vma) printf(" [stack]");
+  if(ma == p->heap_vma) printf(" [heap]");
+  printf("\n");
+}
+
+/* Affiche la liste de VMAs associée à un processus. */
+void print_memory_areas(struct proc* p){
+  struct vma* ma = p->memory_areas;
+  printf("Memory areas:\n");
+  while(ma){
+    print_memory_area(p, ma);
+    ma = ma -> next;
+  }
+  printf("==============\n");
+}
+
+/* Copie les VMAs d'un processus [psrc] vers un processus [pdst]. */
+void vma_copy(struct proc * pdst, struct proc* psrc){
+  acquire(&psrc->vma_lock);
+  struct vma * ma = psrc->memory_areas;
+  while(ma){
+    struct vma* new_vma = add_memory_area(pdst, ma->va_begin, ma->va_end);
+    if(ma->file)
+      new_vma->file = strdup(ma->file);
+    else
+      new_vma->file = 0;
+    new_vma->file_offset = ma->file_offset;
+    new_vma->file_nbytes = ma->file_nbytes;
+    new_vma->vma_flags = ma->vma_flags;
+    if(ma == psrc->stack_vma) pdst->stack_vma = new_vma;
+    if(ma == psrc->heap_vma) pdst->heap_vma = new_vma;
+    ma = ma->next;
+  }
+  release(&psrc->vma_lock);
+}
+
 
 void
 procinit(void)
 {
   struct proc *p;
-  initlock(&prio_lock, "priolock");
   for(int i = 0; i < NPRIO; i++){
+    initlock(&prio_lock[i], "priolock");
     prio[i] = 0;
   }
   initlock(&pid_lock, "nextpid");
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
+      initlock(&p->vma_lock, "vma");
 
       // Allocate a page for the process's kernel stack.
       // Map it high in memory, followed by an invalid
@@ -167,6 +238,7 @@ found:
   p->pagetable = proc_pagetable(p);
 
   p->priority = DEF_PRIO;
+  p->memory_areas = 0;
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
@@ -193,6 +265,12 @@ freeproc(struct proc *p)
   p->cmd = 0;
   p->priority = 0;
   p->pagetable = 0;
+  acquire(&p->vma_lock);
+  free_vma(p->memory_areas);
+  release(&p->vma_lock);
+  p->memory_areas = 0;
+  p->stack_vma = 0;
+  p->heap_vma = 0;
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
@@ -279,9 +357,9 @@ userinit(void)
 // Grow or shrink user memory by n bytes.
 // Return 0 on success, -1 on failure.
 int
-growproc(int n)
+growproc(long n)
 {
-  uint sz;
+  uint64 sz;
   struct proc *p = myproc();
 
   sz = p->sz;
@@ -316,6 +394,7 @@ fork(void)
     release(&np->lock);
     return -1;
   }
+  vma_copy(np, p);
   np->sz = p->sz;
 
   np->parent = p;
@@ -763,4 +842,9 @@ void priodump(void){
     }
     printf("\n");
   }
+}
+
+void proc_vmprint(struct proc* p){
+  vmprint(p->pagetable, p->pid, p->cmd);
+  print_memory_areas(p);
 }

@@ -94,7 +94,7 @@ int             cpuid(void);
 void            exit(int);
 int             fork(void);
 int             nice(int,int);
-int             growproc(int);
+int             growproc(long);
 pagetable_t     proc_pagetable(struct proc *);
 void            proc_freepagetable(pagetable_t, uint64);
 int             kill(int);
@@ -114,7 +114,7 @@ int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 void            priodump(void);
-
+void            proc_vmprint(struct proc* p);
 // swtch.S
 void            swtch(struct context*, struct context*);
 
@@ -183,12 +183,14 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
-
+void            vmprint(pagetable_t pt, uint64 pid, char* cmd);
 // plic.c
 void            plicinit(void);
 void            plicinithart(void);
 int             plic_claim(void);
 void            plic_complete(int);
+
+int allocate_if_possible(pagetable_t pagetable, struct proc*, uint64 addr);
 
 // virtio_disk.c
 void            virtio_disk_init(int);
@@ -218,5 +220,10 @@ void lst_push(struct list*, void *);
 void *lst_pop(struct list*);
 void lst_print(struct list*);
 int lst_empty(struct list*);
+
+#define ENOVMA     (-(1L << 1))
+#define ENOMEM     (-(1L << 2))
+#define ENOFILE    (-(1L << 3))
+#define EMAPFAILED (-(1L << 4))
 
 #endif

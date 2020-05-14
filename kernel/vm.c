@@ -182,11 +182,10 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 size, int do_free)
 {
   uint64 a, last;
   pte_t *pte;
-  uint64 pa;
 
   a = PGROUNDDOWN(va);
   last = PGROUNDDOWN(va + size - 1);
-  for(;;){
+  for(; a <= last; a+=PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
     if((*pte & PTE_V) == 0){
@@ -196,14 +195,9 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 size, int do_free)
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
     if(do_free){
-      pa = PTE2PA(*pte);
-      kfree((void*)pa);
+      kfree((void*)PTE2PA(*pte));
     }
     *pte = 0;
-    if(a == last)
-      break;
-    a += PGSIZE;
-    pa += PGSIZE;
   }
 }
 
@@ -359,6 +353,14 @@ uvmclear(pagetable_t pagetable, uint64 va)
   *pte &= ~PTE_U;
 }
 
+int allocate_if_possible(pagetable_t pagetable, struct proc* p, uint64 addr){
+  return 0;
+}
+
+int allocate_if_possible_range(pagetable_t pagetable, struct proc* p, uint64 addr, uint64 len){
+  return 0;
+}
+
 // Copy from kernel to user.
 // Copy len bytes from src to virtual address dstva in a given page table.
 // Return 0 on success, -1 on error.
@@ -366,6 +368,9 @@ int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
+
+  int f = allocate_if_possible_range(pagetable, myproc(), dstva, len);
+  if(f < 0) return -1;
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
@@ -391,6 +396,9 @@ int
 copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
   uint64 n, va0, pa0;
+
+  int f = allocate_if_possible_range(pagetable, myproc(), srcva, len);
+  if(f < 0) return -1;
 
   while(len > 0){
     va0 = PGROUNDDOWN(srcva);
@@ -418,12 +426,21 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
   uint64 n, va0, pa0;
   int got_null = 0;
-
+  int num_allocated = 0;
+  acquire(&myproc()->vma_lock);
   while(got_null == 0 && max > 0){
     va0 = PGROUNDDOWN(srcva);
+    int f = allocate_if_possible(pagetable, myproc(), srcva);
+    if(f < 0) {
+      release(&myproc()->vma_lock);
+     return -1;
+    }
+    num_allocated += f;
     pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
+    if(pa0 == 0){
+      release(&myproc()->vma_lock);
       return -1;
+    }
     n = PGSIZE - (srcva - va0);
     if(n > max)
       n = max;
@@ -445,9 +462,41 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 
     srcva = va0 + PGSIZE;
   }
+  release(&myproc()->vma_lock);
   if(got_null){
     return 0;
   } else {
     return -1;
+  }
+}
+
+void vmprint(pagetable_t pt, uint64 pid, char* cmd){
+  printf("page table for pid=%d, cmd=%s, @%p\n", pid, cmd, pt);
+  for(int i = 0; i < PGSIZE/sizeof(uint64); i++){
+    pte_t pgd = pt[i];
+    if(pgd != 0){
+      printf("..0x%x:\n", i);
+      for(int j = 0; j < 512; j++){
+        pte_t pmd = ((uint64*)(PTE2PA(pgd)))[j];
+        if(pmd != 0){
+          printf(".. ..0x%x: \n", j);
+          for(int k = 0; k < 512; k++){
+            pte_t pte = ((uint64*)(PTE2PA(pmd)))[k];
+            if(pte != 0){
+              printf(".. .. ..0x%x:\t V=%x R=%x W=%x X=%x U=%x VAs=[%p; %p]\n",
+                     k,
+                     (pte & PTE_V) != 0,
+                     (pte & PTE_R) != 0,
+                     (pte & PTE_W) != 0,
+                     (pte & PTE_X) != 0,
+                     (pte & PTE_U) != 0,
+                     ((((i << 9) + j) << 9) + k) << 12,
+                     (((((i << 9) + j) << 9) + k + 1) << 12) - 1
+                );
+            }
+          }
+        }
+      }
+    }
   }
 }

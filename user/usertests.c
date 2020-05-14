@@ -1590,11 +1590,11 @@ sbrkbasic(char *s)
   char *c, *a, *b;
 
   // does sbrk() return the expected failure value?
-  a = sbrk(TOOMUCH);
-  if(a != (char*)0xffffffffffffffffL){
-    printf("%s: sbrk(<toomuch>) returned %p\n", a);
-    exit(1);
-  }
+  /* a = sbrk(TOOMUCH); */
+  /* if(a != (char*)0xffffffffffffffffL){ */
+  /*   printf("%s: sbrk(<toomuch>) returned %p\n", a); */
+  /*   exit(1); */
+  /* } */
 
   // can one sbrk() less than a page?
   a = sbrk(0);
@@ -1627,7 +1627,8 @@ sbrkbasic(char *s)
 void
 sbrkmuch(char *s)
 {
-  enum { BIG=100*1024*1024 };
+  uint64 BIG= 8*1024*1024 - 10 * PGSIZE;
+  printf("BIG = %p\n", BIG);
   char *c, *oldbrk, *a, *lastaddr, *p;
   uint64 amt;
 
@@ -2123,75 +2124,88 @@ main(int argc, char *argv[])
   struct test {
     void (*f)(char *);
     char *s;
+    int ok;
   } tests[] = {
-    {reparent2, "reparent2"},
-    {pgbug, "pgbug" },
-    {sbrkbugs, "sbrkbugs" },
-    // {badwrite, "badwrite" },
-    {badarg, "badarg" },
-    {reparent, "reparent" },
-    {twochildren, "twochildren"},
-    {forkfork, "forkfork"},
-    {forkforkfork, "forkforkfork"},
-    {argptest, "argptest"},
-    {createdelete, "createdelete"},
-    {linkunlink, "linkunlink"},
-    {linktest, "linktest"},
-    {unlinkread, "unlinkread"},
-    {concreate, "concreate"},
-    {subdir, "subdir"},
-    {fourfiles, "fourfiles"},
-    {sharedfd, "sharedfd"},
-    {exectest, "exectest"},
-    {bigargtest, "bigargtest"},
-    {bigwrite, "bigwrite"},
-    {bsstest, "bsstest"},
-    {sbrkbasic, "sbrkbasic"},
-    {sbrkmuch, "sbrkmuch"},
-    {kernmem, "kernmem"},
-    {sbrkfail, "sbrkfail"},
-    {sbrkarg, "sbrkarg"},
-    {validatetest, "validatetest"},
-    {stacktest, "stacktest"},
-    {opentest, "opentest"},
-    {writetest, "writetest"},
-    {writebig, "writebig"},
-    {createtest, "createtest"},
-    {openiputtest, "openiput"},
-    {exitiputtest, "exitiput"},
-    {iputtest, "iput"},
-    {mem, "mem"},
-    {pipe1, "pipe1"},
-    {preempt, "preempt"},
-    {exitwait, "exitwait"},
-    {rmdot, "rmdot"},
-    {fourteen, "fourteen"},
-    {bigfile, "bigfile"},
-    {dirfile, "dirfile"},
-    {iref, "iref"},
-    {forktest, "forktest"},
-    {bigdir, "bigdir"}, // slow
-    { 0, 0},
+    {reparent2, "reparent2", 0},
+    {pgbug, "pgbug" , 0},
+    {sbrkbugs, "sbrkbugs" , 0},
+    // {badwrite, "badwrite" , 0},
+    {badarg, "badarg" , 0},
+    {reparent, "reparent" , 0},
+    {twochildren, "twochildren", 0},
+    {forkfork, "forkfork", 0},
+    {forkforkfork, "forkforkfork", 0},
+    {argptest, "argptest", 0},
+    {createdelete, "createdelete", 0},
+    {linkunlink, "linkunlink", 0},
+    {linktest, "linktest", 0},
+    {unlinkread, "unlinkread", 0},
+    {concreate, "concreate", 0},
+    {subdir, "subdir", 0},
+    {fourfiles, "fourfiles", 0},
+    {sharedfd, "sharedfd", 0},
+    {exectest, "exectest", 0},
+    {bigargtest, "bigargtest", 0},
+    {bigwrite, "bigwrite", 0},
+    {bsstest, "bsstest", 0},
+    {sbrkbasic, "sbrkbasic", 0},
+    {sbrkmuch, "sbrkmuch", 0},
+    {kernmem, "kernmem", 0},
+    {sbrkfail, "sbrkfail", 0},
+    {sbrkarg, "sbrkarg", 0},
+    {validatetest, "validatetest", 0},
+    {stacktest, "stacktest", 0},
+    {opentest, "opentest", 0},
+    {writetest, "writetest", 0},
+    {writebig, "writebig", 0},
+    {createtest, "createtest", 0},
+    {openiputtest, "openiput", 0},
+    {exitiputtest, "exitiput", 0},
+    {iputtest, "iput", 0},
+    {mem, "mem", 0},
+    {pipe1, "pipe1", 0},
+    {preempt, "preempt", 0},
+    {exitwait, "exitwait", 0},
+    {rmdot, "rmdot", 0},
+    {fourteen, "fourteen", 0},
+    {bigfile, "bigfile", 0},
+    {dirfile, "dirfile", 0},
+    {iref, "iref", 0},
+    {forktest, "forktest", 0},
+    {bigdir, "bigdir", 0}, // slow
+    { 0, 0, 0},
   };
     
   printf("usertests starting\n");
 
-  if(open("usertests.ran", 0) >= 0){
-    printf("already ran user tests -- rebuild fs.img (rm fs.img; make fs.img)\n");
-    exit(1);
-  }
-  close(open("usertests.ran", O_CREATE));
+  /* if(open("usertests.ran", 0) >= 0){ */
+  /*   printf("already ran user tests -- rebuild fs.img (rm fs.img; make fs.img)\n"); */
+  /*   exit(1); */
+  /* } */
+  /* close(open("usertests.ran", O_CREATE)); */
 
   int fail = 0;
   for (struct test *t = tests; t->s != 0; t++) {
     if((n == 0) || strcmp(t->s, n) == 0) {
-      if(!run(t->f, t->s))
+      if(!run(t->f, t->s)){
         fail = 1;
+        t->ok = 0;
+      } else {
+        t->ok = 1;
+      }
     }
   }
   if(!fail)
     printf("ALL TESTS PASSED\n");
-  else
+  else{
     printf("SOME TESTS FAILED\n");
+    for (struct test *t = tests; t->s != 0; t++) {
+      if((n == 0) || strcmp(t->s, n) == 0) {
+        if(t->ok == 0){
+          printf("Test %s failed.\n", t->s);
+        }
+      }
+    }
+  }
   exit(1);   // not reached.
 }
