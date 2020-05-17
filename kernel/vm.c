@@ -353,6 +353,30 @@ uvmclear(pagetable_t pagetable, uint64 va)
   *pte &= ~PTE_U;
 }
 
+
+int load_from_file(char* file,
+                   uint64 file_start_offset,
+                   uint64 pa,
+                   uint64 nbytes
+  ){
+    struct inode* ip;
+    begin_op(ROOTDEV);
+    if((ip = namei(file)) == 0){
+      end_op(ROOTDEV);
+      return -1;
+    }
+    ilock(ip);
+    if(readi(ip, 0, pa, file_start_offset, nbytes) != nbytes){
+      iunlockput(ip);
+      end_op(ROOTDEV);
+      return -1;
+    }
+    iunlockput(ip);
+    end_op(ROOTDEV);
+    ip = 0;
+    return 0;
+  }
+
 int allocate_if_possible(pagetable_t pagetable, struct proc* p, uint64 addr){
   return 0;
 }
