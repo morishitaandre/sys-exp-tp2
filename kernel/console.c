@@ -76,15 +76,17 @@ consolewrite(struct file *f, int user_src, uint64 src, int n)
     sleep(cons, &console_number_lock);
   }
   release(&console_number_lock);
-  acquire(&cons->lock);
+  char* buf = bd_malloc(n);
   for(i = 0; i < n; i++){
-    char c;
-    if(either_copyin(&c, user_src, src+i, 1) == -1)
+    if(either_copyin(&buf[i], user_src, src+i, 1) == -1)
       break;
-    consputc(c);
+  }
+  acquire(&cons->lock);
+  for(int j = 0; j < i; j++){
+    consputc(buf[j]);
   }
   release(&cons->lock);
-
+  bd_free(buf);
   return n;
 }
 
@@ -99,7 +101,6 @@ consoleread(struct file *f, int user_dst, uint64 dst, int n)
 {
   uint target;
   int c;
-  char cbuf;
 
   target = n;
   struct cons_t* cons = &consoles[f->minor-1];
@@ -108,6 +109,8 @@ consoleread(struct file *f, int user_dst, uint64 dst, int n)
     sleep(cons, &console_number_lock);
   }
   release(&console_number_lock);
+  int len = 0;
+  char* buf = bd_malloc(n);
   acquire(&cons->lock);
   while(n > 0){
     // wait until interrupt handler has put some
@@ -132,11 +135,7 @@ consoleread(struct file *f, int user_dst, uint64 dst, int n)
     }
 
     // copy the input byte to the user-space buffer.
-    cbuf = c;
-    if(either_copyout(user_dst, dst, &cbuf, 1) == -1)
-      break;
-
-    dst++;
+    buf[len++] = c;
     --n;
 
     if(c == '\n'){
@@ -146,7 +145,8 @@ consoleread(struct file *f, int user_dst, uint64 dst, int n)
     }
   }
   release(&cons->lock);
-
+  either_copyout(user_dst, dst, buf, len);
+  bd_free(buf);
   return target - n;
 }
 

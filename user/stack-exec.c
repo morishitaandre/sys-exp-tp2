@@ -2,6 +2,53 @@
 #include "kernel/memlayout.h"
 #include "user/user.h"
 
+/*
+  # test.S
+  # riscv64-unknown-elf-as -march=rv64gc -fpic test.S
+  # riscv64-unknown-elf-objdump -d /tmp/a.out
+
+  # write(1, s, sizeof(s))
+
+  # fd = 1
+  li a0, 1
+  # syscall write -> a7 = 16
+  li a7, 16
+
+  # looking for the address of the string to print, after ret (0x82, 0x80)
+
+  auipc a1, 0
+  .loop:
+  lbu t0, 0(a1)
+  addi a1, a1, 1
+  li t1, 0x80
+  beq t0, t1, .endloop
+  j .loop
+  .endloop:
+
+  # computing the length of the string, look for 0 byte
+  mv a2, a1
+  .loop2:
+  lbu t0, 0(a2)
+  addi a2, a2, 1
+  beq t0, zero, .endloop2
+  j .loop2
+  .endloop2:
+  sub a2, a2, a1
+
+  ecall
+
+  ret
+
+  .mystring:
+  auipc a1, 4
+  ret
+  "Hello"
+  .mystringend:
+  auipc a2, -4
+  ret
+
+*/
+
 
 char code[] = {
   // li a0, 1
@@ -43,87 +90,38 @@ char code[] = {
   'H', 'e', 'l', 'l', 'o', '!', 0x0a, 0
 };
 
+void do_fork(void (*fn)(void)){
+  int pid = fork();
+  if(pid < 0){
+    printf("fork failed\n"); exit(1);
+  } else if (pid == 0){
+    fn();
+  } else {
+    wait(0);
+  }
+}
+
+void test_code1(){
+  ((void(*)(void))(code))();
+  printf("code1: cette ligne devrait-elle s'afficher ?\n");
+  exit(0);
+}
+
+void test_code2(){
+  char code2[100];
+  for(int i = 0; i < sizeof(code); i++){
+    code2[i] = code[i];
+  }
+
+  ((void(*)(void))(code2))();
+  printf("code2: cette ligne devrait-elle s'afficher ?\n");
+  exit(0);
+}
 
 int
 main(int argc, char *argv[])
 {
-
-  /*
-    # test.S
-    # riscv64-unknown-elf-as -march=rv64gc -fpic test.S
-    # riscv64-unknown-elf-objdump -d /tmp/a.out
-
-    # write(1, s, sizeof(s))
-
-    # fd = 1
-    li a0, 1
-    # syscall write -> a7 = 16
-    li a7, 16
-
-    # looking for the address of the string to print, after ret (0x82, 0x80)
-
-    auipc a1, 0
-    .loop:
-    lbu t0, 0(a1)
-    addi a1, a1, 1
-    li t1, 0x80
-    beq t0, t1, .endloop
-    j .loop
-    .endloop:
-
-    # computing the length of the string, look for 0 byte
-    mv a2, a1
-    .loop2:
-    lbu t0, 0(a2)
-    addi a2, a2, 1
-    beq t0, zero, .endloop2
-    j .loop2
-    .endloop2:
-    sub a2, a2, a1
-
-    ecall
-
-    ret
-
-    .mystring:
-    auipc a1, 4
-    ret
-    "Hello"
-    .mystringend:
-    auipc a2, -4
-    ret
-
-   */
-
-  char code_stack[100];
-  for(int i = 0; i < sizeof(code); i++){
-    code_stack[i] = code[i];
-  }
-
-  int pid = fork();
-  if(pid < 0){
-    printf("fork failed\n"); exit(1);
-  }
-  if(pid == 0){
-    ((void(*)(void))(code_stack))();
-    printf("I successfully ran the stack.\n");
-    exit(0);
-  }
-  else {
-    // in .rodata
-    pid = fork();
-    if(pid < 0){
-      printf("fork failed\n"); exit(1);
-    }
-    if(pid == 0){
-      ((void(*)(void))(code))();
-      printf("I successfully ran the rodata.\n");
-      exit(0);
-    }
-    else {
-      wait(0);
-      wait(0);
-    }
-  }
+  do_fork(test_code1);
+  do_fork(test_code2);
   exit(0);
 }
