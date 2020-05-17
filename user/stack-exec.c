@@ -14,16 +14,9 @@
   # syscall write -> a7 = 16
   li a7, 16
 
-  # looking for the address of the string to print, after ret (0x82, 0x80)
-
-  auipc a1, 0
-  .loop:
-  lbu t0, 0(a1)
-  addi a1, a1, 1
-  li t1, 0x80
-  beq t0, t1, .endloop
-  j .loop
-  .endloop:
+  # looking for the address of the string to print,
+  j .mystring
+  .back:
 
   # computing the length of the string, look for 0 byte
   mv a2, a1
@@ -35,93 +28,101 @@
   .endloop2:
   sub a2, a2, a1
 
+  # Syscall !
   ecall
-
   ret
-
   .mystring:
-  auipc a1, 4
-  ret
-  "Hello"
-  .mystringend:
-  auipc a2, -4
-  ret
-
+  jal a1, .back
+  .data
+  .asciz "Hello"
 */
 
 
 char code[] = {
-  // li a0, 1
-  0x05, 0x45,
-  // li a7, 16
-  0xc1, 0x48,
-  // auipc a1, 0
-  0x97, 0x05, 0x00, 0x00,
-  // .loop:
-  // lbu t0, 0(a1)
-  0x83, 0xc2, 0x05, 0x00,
-  // addi a1, a1, 1
-  0x85, 0x05,
-  //li t1, 0x80
-  0x13, 0x03, 0x00, 0x08,
-  // beq t0 t1, .endloop
-  0x63, 0x83, 0x62, 0x00,
-  // j .loop
-  0xcd, 0xbf,
-  // .endloop:
-  // mv a2, a1
-  0x2e, 0x86,
-  // .loop2:
-  // lbu t0, 0(a2)
-  0x83, 0x42, 0x06, 0x00,
-  // addi a2, a2, 1
-  0x05, 0x06,
-  // beqz t0, .endloop2
-  0x63, 0x83, 0x02, 0x00,
-  // j .loop2
-  0xdd, 0xbf,
-  // .endloop2
-  // sub a2, a2, a1
-  0x0d, 0x8e,
-  // ecall
-  0x73, 0x00, 0x00, 0x00,
-  // ret
-  0x82, 0x80,
-  'H', 'e', 'l', 'l', 'o', '!', 0x0a, 0
-};
+    // li a0, 1
+    0x05, 0x45,
+    // li a7, 16
+    0xc1, 0x48,
+    // j .mystring
+    0x21, 0xa8,
+    // mv a2, a1
+    0x2e, 0x86,
+    // .loop2:
+    // lbu t0, 0(a2)
+    0x83, 0x42, 0x06, 0x00,
+    // addi a2, a2, 1
+    0x05, 0x06,
+    // beqz t0, .endloop2
+    0x63, 0x83, 0x02, 0x00,
+    // j .loop2
+    0xdd, 0xbf,
+    // .endloop2
+    // sub a2, a2, a1
+    0x0d, 0x8e,
+    // ecall
+    0x73, 0x00, 0x00, 0x00,
+    // ret
+    0x82, 0x80,
+    // jal     a1,6 <.back>
+    0xef, 0xf5, 0xbf, 0xfe,
+    'H', 'e', 'l', 'l', 'o', '!', 0x0a, 0};
 
-void do_fork(void (*fn)(void)){
+void do_fork(void (*fn)(void))
+{
   int pid = fork();
-  if(pid < 0){
-    printf("fork failed\n"); exit(1);
-  } else if (pid == 0){
+  if (pid < 0)
+  {
+    printf("fork failed\n");
+    exit(1);
+  }
+  else if (pid == 0)
+  {
     fn();
-  } else {
+  }
+  else
+  {
     wait(0);
   }
 }
 
-void test_code1(){
-  ((void(*)(void))(code))();
+void test_code1()
+{
+  ((void (*)(void))(code))();
   printf("code1: cette ligne devrait-elle s'afficher ?\n");
   exit(0);
 }
 
-void test_code2(){
+void test_code2()
+{
   char code2[100];
-  for(int i = 0; i < sizeof(code); i++){
+  for (int i = 0; i < sizeof(code); i++)
+  {
     code2[i] = code[i];
   }
 
-  ((void(*)(void))(code2))();
+  ((void (*)(void))(code2))();
   printf("code2: cette ligne devrait-elle s'afficher ?\n");
   exit(0);
 }
 
-int
-main(int argc, char *argv[])
+void test_code3()
+{
+  char *code3;
+  code3 =  sbrk(sizeof(code));
+  for (int i = 0; i < sizeof(code); i++)
+  {
+    code3[i] = code[i];
+  }
+
+  ((void (*)(void))(code3))();
+  printf("code3: cette ligne devrait-elle s'afficher ?\n");
+  exit(0);
+}
+
+int main(int argc, char *argv[])
 {
   do_fork(test_code1);
   do_fork(test_code2);
+  do_fork(test_code3);
   exit(0);
 }
