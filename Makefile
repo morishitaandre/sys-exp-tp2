@@ -148,7 +148,7 @@ UPROGS=\
 	$U/_suicide\
 	$U/_rwtest\
 	$U/_naivefib\
-	$u/_stack-exec\
+	$U/_stack-exec\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
