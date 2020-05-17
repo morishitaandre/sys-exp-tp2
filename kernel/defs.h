@@ -225,5 +225,6 @@ int lst_empty(struct list*);
 #define ENOMEM     (-(1L << 2))
 #define ENOFILE    (-(1L << 3))
 #define EMAPFAILED (-(1L << 4))
+#define EBADPERM   (-(1L << 5))
 
 #endif

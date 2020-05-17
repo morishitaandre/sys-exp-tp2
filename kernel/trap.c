@@ -47,6 +47,8 @@ int handle_page_fault(struct proc* p, uint64 scause, uint64 stval, uint64 sepc){
       printf("Could not read file associated with memory area\n");
     } else if (flags == EMAPFAILED){
       printf("mappages failed for an unknown reason\n");
+     } else if (flags == EBADPERM){
+      printf("Bad permission addr=%p, scause=%p\n", addr, scause);
     }
 
     proc_vmprint(p);

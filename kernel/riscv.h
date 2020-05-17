@@ -355,4 +355,8 @@ sfence_vma()
 typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs
 
+#define CAUSE_R 0xd
+#define CAUSE_W 0xf
+#define CAUSE_X 0xc
+
 #endif
