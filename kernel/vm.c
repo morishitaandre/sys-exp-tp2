@@ -378,11 +378,11 @@ int load_from_file(char* file,
   }
 
 int allocate_if_possible(pagetable_t pagetable, struct proc* p, uint64 addr){
-  return ENOVMA;
+  return 0;
 }
 
 int allocate_if_possible_range(pagetable_t pagetable, struct proc* p, uint64 addr, uint64 len){
-  return ENOVMA;
+  return 0;
 }
 
 // Copy from kernel to user.
