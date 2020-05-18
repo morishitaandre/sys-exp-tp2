@@ -416,7 +416,12 @@ sys_exec(void)
   int i;
   uint64 uargv, uarg;
 
-  if(argstr(0, path, MAXPATH) < 0 || argaddr(1, &uargv) < 0){
+  if(argstr(0, path, MAXPATH) < 0){
+    printf("sys_exec: fetch program path failed\n");
+    return -1;
+  }
+  if(argaddr(1, &uargv) < 0){
+    printf("sys_exec: fetch program args failed\n");
     return -1;
   }
   memset(argv, 0, sizeof(argv));
@@ -435,6 +440,7 @@ sys_exec(void)
     if(argv[i] == 0)
       panic("sys_exec kalloc");
     if(fetchstr(uarg, argv[i], PGSIZE) < 0){
+      printf("sys_exec: fetchstr args failed\n");
       goto bad;
     }
   }
