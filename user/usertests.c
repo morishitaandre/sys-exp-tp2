@@ -1654,7 +1654,7 @@ sbrkmuch(char *s)
   }
   c = sbrk(0);
   if(c != a - PGSIZE){
-    printf("%s: sbrk deallocation produced wrong address, a %x c %x\n", a, c);
+    printf("%s: sbrk deallocation produced wrong address, a %x c %x\n", s, a, c);
     exit(1);
   }
 
@@ -1662,7 +1662,7 @@ sbrkmuch(char *s)
   a = sbrk(0);
   c = sbrk(PGSIZE);
   if(c != a || sbrk(0) != a + PGSIZE){
-    printf("%s: sbrk re-allocation failed, a %x c %x\n", a, c);
+    printf("%s: sbrk re-allocation failed, a %x c %x\n", s, a, c);
     exit(1);
   }
   if(*lastaddr == 99){
@@ -1674,7 +1674,7 @@ sbrkmuch(char *s)
   a = sbrk(0);
   c = sbrk(-(sbrk(0) - oldbrk));
   if(c != a){
-    printf("%s: sbrk downsize failed, a %x c %x\n", a, c);
+    printf("%s: sbrk downsize failed, a %x c %x\n", s, a, c);
     exit(1);
   }
 }
