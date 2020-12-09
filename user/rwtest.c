@@ -35,29 +35,13 @@ main(int argc, char** argv)
     exit(1);
   }
   if ((n = read(fd, a, PGSIZE)) < 0) {
-    printf("%s: write sbrk failed\n", s);
+    printf("%s: read sbrk failed\n", s);
     exit(1);
   }
   close(fd);
   unlink("sbrk");
 
   a = sbrk(2*PGSIZE);
-
-  /* int i = 4069; */
-  /* a[i++] = 'H'; */
-  /* a[i++] = 'A'; */
-  /* a[i++] = 'H'; */
-  /* a[i++] = 'A'; */
-  /* a[i++] = '!'; */
-  /* a[i++] = '\0'; */
-  /* a[i++] = 'e'; */
-  /* a[i++] = 'c'; */
-  /* a[i++] = 'h'; */
-  /* a[i++] = 'o'; */
-  /* a[i++] = '\0'; */
-  /* *(char**)(a+i++) = &a[4075]; */
-  /* *(char**)(a+i++) = &a[4069]; */
-  /* char** uargv = (char**)(a+4080); */
 
   a[PGSIZE-5] = 'H';
   a[PGSIZE-4] = 'A';

@@ -8,7 +8,6 @@ text PT_LOAD FILEHDR PHDRS ;
 data PT_LOAD ;
 rodata PT_LOAD ;
 bss PT_LOAD ;
-sbss PT_LOAD ;
 }
 
 SECTIONS
@@ -26,9 +25,6 @@ SECTIONS
 
 . = ALIGN(0x1000);
 .bss : { *(.bss) *(.sbss*) } :bss
-
-. = ALIGN(0x1000);
-.sbss : { *(.sbss*) } :sbss
 
 }
 

@@ -38,6 +38,8 @@ int create_mutex();
 int acquire_mutex(int fd);
 int release_mutex(int fd);
 
+int dump_pagetable(int pid);
+
 // ulib.c
 int stat(const char*, struct stat*);
 char* strcpy(char*, const char*);

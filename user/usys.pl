@@ -51,3 +51,4 @@ entry("nice");
 entry("create_mutex");
 entry("acquire_mutex");
 entry("release_mutex");
+entry("dump_pagetable");

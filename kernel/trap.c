@@ -36,7 +36,9 @@ trapinithart(void)
 int handle_page_fault(struct proc* p, uint64 scause, uint64 stval, uint64 sepc){
   uint64 addr = PGROUNDDOWN(stval);
   acquire(&p->vma_lock);
-  int flags = allocate_if_possible(p->pagetable, p, addr);
+  printf("handle_page_fault pid=%d (%s), scause=%p, stval=%p, sepc=%p\n", p->pid, p->name, scause, stval, sepc);
+  // proc_vmprint(p);
+  int flags = do_allocate(p->pagetable, p, addr);
   release(&p->vma_lock);
   if(flags < 0){
     if(flags == ENOVMA){

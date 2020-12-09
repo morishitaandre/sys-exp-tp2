@@ -146,10 +146,11 @@ UPROGS=\
 	$U/_rocky\
 	$U/_watchdog-panic\
 	$U/_sbrk-dealloc\
-	$U/_suicide\
+	$U/_sbrk-test\
 	$U/_rwtest\
 	$U/_naivefib\
 	$U/_stack-exec\
+	$U/_pagetable\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

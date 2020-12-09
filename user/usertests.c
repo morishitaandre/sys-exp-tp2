@@ -1841,8 +1841,13 @@ bigargtest(char *s)
   if(pid == 0){
     static char *args[MAXARG];
     int i;
+    uint sz = (USTACK_LIMIT / MAXARG + 2) * sizeof(char);
+    char* str = malloc(sz);
+    memset(str, ' ', sz - 1);
+    str[sz-1] = '\0';
     for(i = 0; i < MAXARG-1; i++)
-      args[i] = "bigargs test: failed\n                                                                                                                                                                                                       ";
+      //args[i] = "bigargs test: failed\n                                                                                                                                                                                                       ";
+      args[i] = str;
     args[MAXARG-1] = 0;
     exec("echo", args);
     fd = open("bigarg-ok", O_CREATE);
@@ -1948,7 +1953,7 @@ stacktest(char *s)
   pid = fork();
   if(pid == 0) {
     char *sp = (char *) r_sp();
-    sp -= PGSIZE;
+    sp -= USTACK_LIMIT;
     // the *sp should cause a trap.
     printf("%s: stacktest: read below stack %p\n", *sp);
     exit(1);
@@ -2096,6 +2101,7 @@ run(void f(char *), char *s) {
   int xstatus;
   
   printf("test %s: ", s);
+  fflush(1);
   if((pid = fork()) < 0) {
     printf("runtest: fork error\n");
     exit(1);

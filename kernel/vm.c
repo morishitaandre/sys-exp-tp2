@@ -79,7 +79,7 @@ static pte_t *
 walk(pagetable_t pagetable, uint64 va, int alloc)
 {
   if(va >= MAXVA)
-    panic("walk");
+    return 0;
 
   for(int level = 2; level > 0; level--) {
     pte_t *pte = &pagetable[PX(level, va)];
@@ -187,10 +187,9 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 size, int do_free)
   last = PGROUNDDOWN(va + size - 1);
   for(; a <= last; a+=PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
-      panic("uvmunmap: walk");
+      continue;
     if((*pte & PTE_V) == 0){
-      printf("va=%p pte=%p\n", a, *pte);
-      panic("uvmunmap: not mapped");
+      continue;
     }
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
@@ -320,9 +319,9 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
-      panic("uvmcopy: pte should exist");
+      continue;
     if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
+      continue;
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)
@@ -377,11 +376,11 @@ int load_from_file(char* file,
     return 0;
   }
 
-int allocate_if_possible(pagetable_t pagetable, struct proc* p, uint64 addr){
+int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr){
   return 0;
 }
 
-int allocate_if_possible_range(pagetable_t pagetable, struct proc* p, uint64 addr, uint64 len){
+int do_allocate_range(pagetable_t pagetable, struct proc* p, uint64 addr, uint64 len){
   return 0;
 }
 
@@ -393,7 +392,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
 
-  int f = allocate_if_possible_range(pagetable, myproc(), dstva, len);
+  int f = do_allocate_range(pagetable, myproc(), dstva, len);
   if(f < 0) return -1;
 
   while(len > 0){
@@ -421,7 +420,7 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
   uint64 n, va0, pa0;
 
-  int f = allocate_if_possible_range(pagetable, myproc(), srcva, len);
+  int f = do_allocate_range(pagetable, myproc(), srcva, len);
   if(f < 0) return -1;
 
   while(len > 0){
@@ -448,13 +447,13 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 int
 copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
-  uint64 n, va0, pa0;
+    uint64 n, va0, pa0;
   int got_null = 0;
   int num_allocated = 0;
   acquire(&myproc()->vma_lock);
   while(got_null == 0 && max > 0){
     va0 = PGROUNDDOWN(srcva);
-    int f = allocate_if_possible(pagetable, myproc(), srcva);
+    int f = do_allocate(pagetable, myproc(), srcva);
     if(f < 0) {
       release(&myproc()->vma_lock);
      return -1;

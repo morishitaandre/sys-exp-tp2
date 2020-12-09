@@ -100,3 +100,12 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_dump_pagetable(void){
+  int pid;
+  if(argint(0, &pid) < 0)
+    return -1;
+  proc_vmprint_by_pid(pid);
+  return 0;
+}

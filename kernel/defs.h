@@ -115,6 +115,7 @@ int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 void            priodump(void);
 void            proc_vmprint(struct proc* p);
+void            proc_vmprint_by_pid(int pid);
 // swtch.S
 void            swtch(struct context*, struct context*);
 
@@ -190,7 +191,7 @@ void            plicinithart(void);
 int             plic_claim(void);
 void            plic_complete(int);
 
-int allocate_if_possible(pagetable_t pagetable, struct proc*, uint64 addr);
+int do_allocate(pagetable_t pagetable, struct proc*, uint64 addr);
 
 // virtio_disk.c
 void            virtio_disk_init(int);
