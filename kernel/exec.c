@@ -22,6 +22,27 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pagetable_t pagetable = 0, oldpagetable;
   struct proc *p = myproc();
+  
+  
+  
+  // TP2 Act4.1.3
+  
+  // Sauvegarde
+  struct vma * initial_stack_vma = p->stack_vma;
+  struct vma * initial_heap_vma = p->heap_vma;
+  struct vma * initial_memory_areas = p->memory_areas;
+  
+  // Réinitialisation
+  
+  p->memory_areas = 0;
+  add_memory_area(p, 0, PGSIZE);
+  
+  p->stack_vma = 0;
+  p->heap_vma = add_memory_area(p, 0, 0);
+  
+  //
+  
+  
 
   begin_op(ROOTDEV);
 
@@ -146,6 +167,8 @@ exec(char *path, char **argv)
   p->tf->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);
 
+  free_vma(initial_memory_areas);
+
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
  bad:
@@ -155,8 +178,21 @@ exec(char *path, char **argv)
     iunlockput(ip);
     end_op(ROOTDEV);
   }
+  
+  //
+  if(p->memory_areas)
+  {
+    free_vma(p->memory_areas);
+  }
+  p->stack_vma = initial_stack_vma;
+  p->heap_vma = initial_heap_vma;
+  p->memory_areas = initial_memory_areas;
+  
+  //
+    
   return -1;
 }
+
 
 // Load a program segment into pagetable at virtual address va.
 // va must be page-aligned

@@ -338,6 +338,17 @@ void userinit(void) {
 
   p = allocproc();
   initproc = p;
+  
+  
+  // TP2 Act4.1.1
+  
+  
+  add_memory_area(p, 0, PGSIZE);
+  
+  
+  //
+  
+  
 
   // allocate one user page and copy init's instructions
   // and data into it.
@@ -385,6 +396,15 @@ int fork(void) {
   if ((np = allocproc()) == 0) {
     return -1;
   }
+  
+  
+  // TP2 Act4.1.2 
+  
+  // Recopie les VMAs du processus père vers le processus fils
+  vma_copy(np, p);
+  
+ //
+  
 
   // Copy user memory from parent to child.
   if (uvmcopy(p->pagetable, np->pagetable, p->sz) < 0) {
