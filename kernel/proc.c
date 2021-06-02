@@ -338,17 +338,17 @@ void userinit(void) {
 
   p = allocproc();
   initproc = p;
-  
-  
+
+
   // TP2 Act4.1.1
-  
-  
+
+
   add_memory_area(p, 0, PGSIZE);
-  
-  
+
+
   //
-  
-  
+
+
 
   // allocate one user page and copy init's instructions
   // and data into it.
@@ -374,10 +374,23 @@ int growproc(long n) {
   struct proc *p = myproc();
 
   sz = p->sz;
+
+
   if(n > 0){
-    if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
+    // if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
+    //   return -1;
+    // }
+
+    // TP2 Act4.3
+    uint64 heap_old_end = p->heap_vma->va_end;
+    p->heap_vma->va_end = heap_old_end + n;
+    if ( !((p->heap_vma->va_begin <= p->heap_vma->va_end) && (p->heap_vma->va_end - p->heap_vma->va_begin < HEAP_THRESHOLD)) ) {
+      p->heap_vma->va_end = heap_old_end;
       return -1;
     }
+    sz = sz + n;
+    //
+
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
@@ -396,15 +409,15 @@ int fork(void) {
   if ((np = allocproc()) == 0) {
     return -1;
   }
-  
-  
-  // TP2 Act4.1.2 
-  
+
+
+  // TP2 Act4.1.2
+
   // Recopie les VMAs du processus père vers le processus fils
   vma_copy(np, p);
-  
+
  //
-  
+
 
   // Copy user memory from parent to child.
   if (uvmcopy(p->pagetable, np->pagetable, p->sz) < 0) {
