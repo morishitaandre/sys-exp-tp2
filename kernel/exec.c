@@ -22,27 +22,23 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pagetable_t pagetable = 0, oldpagetable;
   struct proc *p = myproc();
-  
-  
-  
+
+
+
   // TP2 Act4.1.3
-  
+
   // Sauvegarde
   struct vma * initial_stack_vma = p->stack_vma;
   struct vma * initial_heap_vma = p->heap_vma;
   struct vma * initial_memory_areas = p->memory_areas;
-  
+
   // Réinitialisation
-  
   p->memory_areas = 0;
-  add_memory_area(p, 0, PGSIZE);
-  
   p->stack_vma = 0;
-  p->heap_vma = add_memory_area(p, 0, 0);
-  
+  p->heap_vma = 0;
   //
-  
-  
+
+
 
   begin_op(ROOTDEV);
 
@@ -94,6 +90,15 @@ exec(char *path, char **argv)
       printf("exec: loadseg failed\n");
       goto bad;
     }
+    ////
+    acquire(&p->vma_lock);
+    if (!get_memory_area(p, ph.vaddr)) {
+      release(&p->vma_lock);
+      add_memory_area(p, ph.vaddr, ph.vaddr + ph.memsz);
+    } else {
+      release(&p->vma_lock);
+    }
+    ////
   }
   iunlockput(ip);
   end_op(ROOTDEV);
@@ -112,6 +117,11 @@ exec(char *path, char **argv)
   uvmclear(pagetable, sz-2*PGSIZE);
   sp = sz;
   stackbase = sp - PGSIZE;
+
+  /////
+  p->stack_vma = add_memory_area(p, stackbase, sp+1);
+  p->heap_vma = add_memory_area(p, sp+1, sp+1);
+  /////
 
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
@@ -167,7 +177,12 @@ exec(char *path, char **argv)
   p->tf->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);
 
+  ///
+
+
   free_vma(initial_memory_areas);
+  ///
+
 
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
@@ -178,7 +193,7 @@ exec(char *path, char **argv)
     iunlockput(ip);
     end_op(ROOTDEV);
   }
-  
+
   //
   if(p->memory_areas)
   {
@@ -187,9 +202,9 @@ exec(char *path, char **argv)
   p->stack_vma = initial_stack_vma;
   p->heap_vma = initial_heap_vma;
   p->memory_areas = initial_memory_areas;
-  
+
   //
-    
+
   return -1;
 }
 
@@ -218,6 +233,6 @@ loadseg(pagetable_t pagetable, uint64 va, struct inode *ip, uint offset, uint sz
     if(readi(ip, 0, (uint64)pa, offset+i, n) != n)
       return -1;
   }
-  
+
   return 0;
 }
