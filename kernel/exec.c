@@ -119,8 +119,8 @@ exec(char *path, char **argv)
   stackbase = sp - PGSIZE;
 
   /////
-  p->stack_vma = add_memory_area(p, stackbase, sp+1);
-  p->heap_vma = add_memory_area(p, sp+1, sp+1);
+  p->stack_vma = add_memory_area(p, stackbase, sp); // It is now corrected in Activite 4.6
+  p->heap_vma = add_memory_area(p, sp, sp);
   /////
 
   // Push argument strings, prepare rest of stack in ustack.

@@ -376,15 +376,34 @@ int load_from_file(char* file,
     return 0;
   }
 
-/// TP2 Act4.5
+/// TP2 Act4.6
 int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr){
+  // VMAs
+  if (!get_memory_area(p, addr)) {
+    return ENOVMA;
+  }
+
   pte_t *pte = walk(pagetable, addr, 0);
   if ( !( pte && (*pte & PTE_V) ) ) {
-    return ENOMEM;
+    // Page n’est pas déjà présente
+    addr = PGROUNDDOWN(addr);
+    void *physical_addr = kalloc();
+    if (physical_addr == 0) {
+      // kalloc failed. Impossible d’allouer une nouvelle page physique.
+      return ENOMEM;;
+    }
+    if(mappages(pagetable, addr, PGSIZE, (uint64)physical_addr, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+      // mappages failed
+      kfree(physical_addr);
+      return EMAPFAILED;
+    }
+
   }
+
   if (!(*pte & PTE_U)) {
     return EBADPERM;
   }
+
   return 0;
 }
 ///
