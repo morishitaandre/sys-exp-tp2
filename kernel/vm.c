@@ -379,27 +379,50 @@ int load_from_file(char* file,
 /// TP2 Act4.6
 int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr, uint64 scause){
   // VMAs
-  if (!get_memory_area(p, addr)) {
+  struct vma* ma = get_memory_area(p, addr);
+  if (!ma) {
     return ENOVMA;
   }
 
+
+
   pte_t *pte = walk(pagetable, addr, 0);
-  if ( !( pte && (*pte & PTE_V) ) ) {
+  if ( !( pte && (*pte & PTE_V) ) || scause == CAUSE_X ) {
     // Page n’est pas déjà présente
+    if (scause == CAUSE_W) {
+      if ( (ma->vma_flags & VMA_W) == 0) {
+        return EBADPERM;
+      }
+    } else if (scause == CAUSE_R) {
+      if ( (ma->vma_flags & VMA_R) == 0) {
+        return EBADPERM;
+      }
+    } else if (scause == CAUSE_X) {
+      if ( (ma->vma_flags & VMA_X) == 0) {
+        return EBADPERM;
+      }
+    } else {
+      return EBADPERM;
+    }
+
+    int flags = PTE_U;
+    flags |= (ma->vma_flags & VMA_R) != 0 ? PTE_R : 0;
+    flags |= (ma->vma_flags & VMA_W) != 0 ? PTE_W : 0;
+    flags |= (ma->vma_flags & VMA_X) != 0 ? PTE_X : 0;
+
     addr = PGROUNDDOWN(addr);
     void *physical_addr = kalloc();
     if (physical_addr == 0) {
       // kalloc failed. Impossible d’allouer une nouvelle page physique.
       return ENOMEM;
     }
-    if(mappages(pagetable, addr, PGSIZE, (uint64)physical_addr, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+    if(mappages(pagetable, addr, PGSIZE, (uint64)physical_addr, flags) != 0){
       // mappages failed
       kfree(physical_addr);
       return EMAPFAILED;
     }
 
-  } else if (!(*pte & PTE_U)) {
-    // Page est déjà présente
+  } else if (!(*pte & PTE_U)) { // Page est déjà présente
     return EBADPERM;
   }
 
@@ -439,7 +462,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
 
-  int f = do_allocate_range(pagetable, myproc(), dstva, len, CAUSE_R);
+  int f = do_allocate_range(pagetable, myproc(), dstva, len, CAUSE_W);
   if(f < 0) return -1;
 
   while(len > 0){
@@ -467,7 +490,7 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
   uint64 n, va0, pa0;
 
-  int f = do_allocate_range(pagetable, myproc(), srcva, len, CAUSE_W );
+  int f = do_allocate_range(pagetable, myproc(), srcva, len, CAUSE_R );
   if(f < 0) return -1;
 
   while(len > 0){
@@ -500,7 +523,7 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   acquire(&myproc()->vma_lock);
   while(got_null == 0 && max > 0){
     va0 = PGROUNDDOWN(srcva);
-    int f = do_allocate(pagetable, myproc(), srcva, CAUSE_W);
+    int f = do_allocate(pagetable, myproc(), srcva, CAUSE_R);
     if(f < 0) {
       release(&myproc()->vma_lock);
      return -1;

@@ -95,7 +95,7 @@ exec(char *path, char **argv)
     acquire(&p->vma_lock);
     if (!get_memory_area(p, ph.vaddr)) {
       release(&p->vma_lock);
-      add_memory_area(p, ph.vaddr, ph.vaddr + ph.memsz);
+      add_memory_area(p, ph.vaddr, ph.vaddr + ph.memsz)->vma_flags = VMA_X;
     } else {
       release(&p->vma_lock);
     }
