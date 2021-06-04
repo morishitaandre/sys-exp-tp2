@@ -125,9 +125,11 @@ exec(char *path, char **argv)
 
   /////
   p->heap_vma = add_memory_area(p, sz, sz);
+  p->heap_vma->vma_flags = VMA_R | VMA_W;
   sp = USTACK_TOP;
   stackbase = USTACK_BOTTOM;
   p->stack_vma = add_memory_area(p, stackbase, sp); // It is now corrected in Activite 4.6
+  p->stack_vma->vma_flags = VMA_R | VMA_W;
   /////
 
   // Push argument strings, prepare rest of stack in ustack.
