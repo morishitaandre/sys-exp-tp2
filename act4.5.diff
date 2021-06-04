@@ -1,0 +1,41 @@
+diff --git a/kernel/vm.c b/kernel/vm.c
+index ee6c99d..694e404 100644
+--- a/kernel/vm.c
++++ b/kernel/vm.c
+@@ -138,7 +138,7 @@ kvmpa(uint64 va)
+   uint64 off = va % PGSIZE;
+   pte_t *pte;
+   uint64 pa;
+-  
++
+   pte = walk(kernel_pagetable, va, 0);
+   if(pte == 0)
+     panic("kvmpa");
+@@ -345,7 +345,7 @@ void
+ uvmclear(pagetable_t pagetable, uint64 va)
+ {
+   pte_t *pte;
+-  
++
+   pte = walk(pagetable, va, 0);
+   if(pte == 0)
+     panic("uvmclear");
+@@ -376,9 +376,18 @@ int load_from_file(char* file,
+     return 0;
+   }
+ 
++/// TP2 Act4.5
+ int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr){
++  pte_t *pte = walk(pagetable, addr, 0);
++  if ( !( pte && (*pte & PTE_V) ) ) {
++    return ENOMEM;
++  }
++  if (!(*pte & PTE_U)) {
++    return EBADPERM;
++  }
+   return 0;
+ }
++///
+ 
+ int do_allocate_range(pagetable_t pagetable, struct proc* p, uint64 addr, uint64 len){
+   return 0;

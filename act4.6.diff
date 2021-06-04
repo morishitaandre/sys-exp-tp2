@@ -1,0 +1,122 @@
+diff --git a/kernel/exec.c b/kernel/exec.c
+index 89f3b24..81c06c2 100644
+--- a/kernel/exec.c
++++ b/kernel/exec.c
+@@ -119,8 +119,8 @@ exec(char *path, char **argv)
+   stackbase = sp - PGSIZE;
+ 
+   /////
+-  p->stack_vma = add_memory_area(p, stackbase, sp+1);
+-  p->heap_vma = add_memory_area(p, sp+1, sp+1);
++  p->stack_vma = add_memory_area(p, stackbase, sp); // It is now corrected in Activite 4.6
++  p->heap_vma = add_memory_area(p, sp, sp);
+   /////
+ 
+   // Push argument strings, prepare rest of stack in ustack.
+diff --git a/kernel/trap.c b/kernel/trap.c
+index 1537634..1e21f73 100644
+--- a/kernel/trap.c
++++ b/kernel/trap.c
+@@ -79,7 +79,7 @@ usertrap(void)
+   w_stvec((uint64)kernelvec);
+ 
+   struct proc *p = myproc();
+-  
++
+   // save user program counter.
+   p->tf->epc = r_sepc();
+ 
+@@ -100,7 +100,7 @@ usertrap(void)
+     intr_on();
+ 
+     syscall();
+-  } else if (scause == 0xf || scause == 0xd) {
++  } else if (scause == 0xf || scause == 0xd || scause == 0xc) {
+     handle_page_fault(p, scause, r_stval(), r_sepc());
+   } else if((which_dev = devintr()) != 0){
+     // ok
+@@ -144,7 +144,7 @@ usertrapret(void)
+ 
+   // set up the registers that trampoline.S's sret will use
+   // to get to user space.
+-  
++
+   // set S Previous Privilege mode to User.
+   unsigned long x = r_sstatus();
+   x &= ~SSTATUS_SPP; // clear SPP to 0 for user mode
+@@ -157,7 +157,7 @@ usertrapret(void)
+   // tell trampoline.S the user page table to switch to.
+   uint64 satp = MAKE_SATP(p->pagetable);
+ 
+-  // jump to trampoline.S at the top of memory, which 
++  // jump to trampoline.S at the top of memory, which
+   // switches to the user page table, restores user registers,
+   // and switches to user mode with sret.
+   uint64 fn = TRAMPOLINE + (userret - trampoline);
+@@ -166,14 +166,14 @@ usertrapret(void)
+ 
+ // interrupts and exceptions from kernel code go here via kernelvec,
+ // on whatever the current kernel stack is.
+-void 
++void
+ kerneltrap()
+ {
+   int which_dev = 0;
+   uint64 sepc = r_sepc();
+   uint64 sstatus = r_sstatus();
+   uint64 scause = r_scause();
+-  
++
+   if((sstatus & SSTATUS_SPP) == 0)
+     panic("kerneltrap: not from supervisor mode");
+   if(intr_get() != 0)
+@@ -246,7 +246,7 @@ devintr()
+     if(cpuid() == 0){
+       clockintr();
+     }
+-    
++
+     // acknowledge the software interrupt by clearing
+     // the SSIP bit in sip.
+     w_sip(r_sip() & ~2);
+diff --git a/kernel/vm.c b/kernel/vm.c
+index 694e404..29a51c1 100644
+--- a/kernel/vm.c
++++ b/kernel/vm.c
+@@ -376,15 +376,34 @@ int load_from_file(char* file,
+     return 0;
+   }
+ 
+-/// TP2 Act4.5
++/// TP2 Act4.6
+ int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr){
++  // VMAs
++  if (!get_memory_area(p, addr)) {
++    return ENOVMA;
++  }
++
+   pte_t *pte = walk(pagetable, addr, 0);
+   if ( !( pte && (*pte & PTE_V) ) ) {
+-    return ENOMEM;
++    // Page n’est pas déjà présente
++    addr = PGROUNDDOWN(addr);
++    void *physical_addr = kalloc();
++    if (physical_addr == 0) {
++      // kalloc failed. Impossible d’allouer une nouvelle page physique.
++      return ENOMEM;;
++    }
++    if(mappages(pagetable, addr, PGSIZE, (uint64)physical_addr, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
++      // mappages failed
++      kfree(physical_addr);
++      return EMAPFAILED;
++    }
++
+   }
++
+   if (!(*pte & PTE_U)) {
+     return EBADPERM;
+   }
++
+   return 0;
+ }
+ ///

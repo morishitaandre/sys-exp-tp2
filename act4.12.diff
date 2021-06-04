@@ -1,0 +1,162 @@
+diff --git a/kernel/exec.c b/kernel/exec.c
+index 81c06c2..13e32ed 100644
+--- a/kernel/exec.c
++++ b/kernel/exec.c
+@@ -31,6 +31,7 @@ exec(char *path, char **argv)
+   struct vma * initial_stack_vma = p->stack_vma;
+   struct vma * initial_heap_vma = p->heap_vma;
+   struct vma * initial_memory_areas = p->memory_areas;
++  uint64 oldsz = max_addr_in_memory_areas(p); // TP2 Act4.12
+ 
+   // Réinitialisation
+   p->memory_areas = 0;
+@@ -105,7 +106,7 @@ exec(char *path, char **argv)
+   ip = 0;
+ 
+   p = myproc();
+-  uint64 oldsz = p->sz;
++  //uint64 oldsz = p->sz; // TP2 Act4.12
+ 
+   // Allocate two pages at the next page boundary.
+   // Use the second as the user stack.
+@@ -172,7 +173,7 @@ exec(char *path, char **argv)
+   // Commit to the user image.
+   oldpagetable = p->pagetable;
+   p->pagetable = pagetable;
+-  p->sz = sz;
++  //p->sz = sz; // TP2 Act4.12
+   p->tf->epc = elf.entry;  // initial program counter = main
+   p->tf->sp = sp; // initial stack pointer
+   proc_freepagetable(oldpagetable, oldsz);
+diff --git a/kernel/proc.c b/kernel/proc.c
+index c591bab..969f50c 100644
+--- a/kernel/proc.c
++++ b/kernel/proc.c
+@@ -272,7 +272,7 @@ static void freeproc(struct proc *p) {
+     kfree((void *)p->tf);
+   p->tf = 0;
+   if (p->pagetable)
+-    proc_freepagetable(p->pagetable, p->sz);
++    proc_freepagetable(p->pagetable,/*p->sz*/ max_addr_in_memory_areas(p));
+   if (p->cmd)
+     bd_free(p->cmd);
+   p->cmd = 0;
+@@ -284,7 +284,7 @@ static void freeproc(struct proc *p) {
+   p->memory_areas = 0;
+   p->stack_vma = 0;
+   p->heap_vma = 0;
+-  p->sz = 0;
++  //p->sz = 0; // TP2 Act4.12
+   p->pid = 0;
+   p->parent = 0;
+   p->name[0] = 0;
+@@ -353,7 +353,7 @@ void userinit(void) {
+   // allocate one user page and copy init's instructions
+   // and data into it.
+   uvminit(p->pagetable, initcode, sizeof(initcode));
+-  p->sz = PGSIZE;
++  //p->sz = PGSIZE; // TP2 Act4.12
+ 
+   // prepare for the very first "return" from kernel to user.
+   p->tf->epc = 0;     // user program counter
+@@ -373,7 +373,7 @@ int growproc(long n) {
+   uint64 sz;
+   struct proc *p = myproc();
+ 
+-  sz = p->sz;
++  sz = /* p->sz */ max_addr_in_memory_areas(p); // TP2 Act4.12
+ 
+ 
+   if(n > 0){
+@@ -388,13 +388,18 @@ int growproc(long n) {
+       p->heap_vma->va_end = heap_old_end;
+       return -1;
+     }
+-    sz = sz + n;
++    //sz = sz + n; // TP2 Act4.12
+     //
+ 
+   } else if(n < 0){
+     sz = uvmdealloc(p->pagetable, sz, sz + n);
++    if (sz < p->heap_vma->va_begin) {
++      p->heap_vma->va_end = p->heap_vma->va_begin;
++    } else {
++      p->heap_vma->va_end = sz;
++    }
+   }
+-  p->sz = sz;
++  //p->sz = sz; // TP2 Act4.12;
+   return 0;
+ }
+ 
+@@ -420,12 +425,12 @@ int fork(void) {
+ 
+ 
+   // Copy user memory from parent to child.
+-  if (uvmcopy(p->pagetable, np->pagetable, p->sz) < 0) {
++  if (uvmcopy(p->pagetable, np->pagetable, /*p->sz*/max_addr_in_memory_areas(p)) < 0) {
+     freeproc(np);
+     release(&np->lock);
+     return -1;
+   }
+-  np->sz = p->sz;
++  //np->sz = p->sz;  // TP2 Act4.12
+ 
+   np->parent = p;
+ 
+diff --git a/kernel/proc.h b/kernel/proc.h
+index 30ef880..a0763b8 100644
+--- a/kernel/proc.h
++++ b/kernel/proc.h
+@@ -144,7 +144,7 @@ struct proc {
+ 
+   // these are private to the process, so p->lock need not be held.
+   uint64 kstack;               // Virtual address of kernel stack
+-  uint64 sz;                   // Size of process memory (bytes)
++  //uint64 sz;                   // Size of process memory (bytes)
+   struct spinlock vma_lock;
+   struct vma * memory_areas;   // VMAs du processus
+   struct vma * stack_vma;      // Une VMA particulière pour la pile
+diff --git a/kernel/syscall.c b/kernel/syscall.c
+index d03d675..5ebaf7d 100644
+--- a/kernel/syscall.c
++++ b/kernel/syscall.c
+@@ -12,7 +12,8 @@ int
+ fetchaddr(uint64 addr, uint64 *ip)
+ {
+   struct proc *p = myproc();
+-  if(addr >= p->sz || addr+sizeof(uint64) > p->sz)
++  uint64 sz = max_addr_in_memory_areas(p); // TP2 Act4.12
++  if(addr >= /*p->sz*/sz || addr+sizeof(uint64) > /*p->sz*/sz)
+     return -1;
+   if(copyin(p->pagetable, (char *)ip, addr, sizeof(*ip)) != 0)
+     return -1;
+diff --git a/kernel/sysproc.c b/kernel/sysproc.c
+index 2b7454c..d9112b6 100644
+--- a/kernel/sysproc.c
++++ b/kernel/sysproc.c
+@@ -46,7 +46,7 @@ sys_sbrk(void)
+ 
+   if(argaddr(0, &n) < 0)
+     return -1;
+-  addr = myproc()->sz;
++  addr = /*myproc()->sz*/ max_addr_in_memory_areas(myproc());
+   if(growproc((long)n) < 0)
+     return -1;
+   return addr;
+diff --git a/kernel/vm.c b/kernel/vm.c
+index e8c8b7b..a26ee23 100644
+--- a/kernel/vm.c
++++ b/kernel/vm.c
+@@ -398,9 +398,8 @@ int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr){
+       return EMAPFAILED;
+     }
+ 
+-  }
+-
+-  if (!(*pte & PTE_U)) {
++  } else if (!(*pte & PTE_U)) {
++    // Page est déjà présente
+     return EBADPERM;
+   }
+ 

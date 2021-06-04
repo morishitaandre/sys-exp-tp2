@@ -1,0 +1,43 @@
+diff --git a/kernel/vm.c b/kernel/vm.c
+index 29a51c1..e8c8b7b 100644
+--- a/kernel/vm.c
++++ b/kernel/vm.c
+@@ -390,7 +390,7 @@ int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr){
+     void *physical_addr = kalloc();
+     if (physical_addr == 0) {
+       // kalloc failed. Impossible d’allouer une nouvelle page physique.
+-      return ENOMEM;;
++      return ENOMEM;
+     }
+     if(mappages(pagetable, addr, PGSIZE, (uint64)physical_addr, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+       // mappages failed
+@@ -408,9 +408,29 @@ int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr){
+ }
+ ///
+ 
++/// TP2 Act4.11
+ int do_allocate_range(pagetable_t pagetable, struct proc* p, uint64 addr, uint64 len){
++  if(len < 0)
++    return -2;
++
++  int do_allocate_value;
++  addr = PGROUNDDOWN(addr);
++  uint64 addr_floor = addr;
++  len = PGROUNDUP(len);
++  for (; addr < addr_floor + len; addr += PGSIZE) {
++    acquire(&p->vma_lock);
++    if ((do_allocate_value = do_allocate(pagetable, p, addr)) != 0) {
++      release(&p->vma_lock);
++      // Something went wrong, deallocate previously allocated memory
++      uvmdealloc(pagetable, addr, addr_floor);
++      return do_allocate_value;
++    }
++    release(&p->vma_lock);
++  }
++
+   return 0;
+ }
++///
+ 
+ // Copy from kernel to user.
+ // Copy len bytes from src to virtual address dstva in a given page table.
