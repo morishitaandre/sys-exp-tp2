@@ -398,9 +398,8 @@ int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr){
       return EMAPFAILED;
     }
 
-  }
-
-  if (!(*pte & PTE_U)) {
+  } else if (!(*pte & PTE_U)) {
+    // Page est déjà présente
     return EBADPERM;
   }
 
