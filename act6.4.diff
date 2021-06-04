@@ -1,0 +1,1091 @@
+diff --git a/act5.2.diff b/act5.2.diff
+new file mode 100644
+index 0000000..f7d012c
+--- /dev/null
++++ b/act5.2.diff
+@@ -0,0 +1,960 @@
++diff --git a/act4.1.diff b/act4.1.diff
++new file mode 100644
++index 0000000..02c44a1
++--- /dev/null
+++++ b/act4.1.diff
++@@ -0,0 +1,102 @@
+++diff --git a/kernel/exec.c b/kernel/exec.c
+++index 69f8b40..6038126 100644
+++--- a/kernel/exec.c
++++++ b/kernel/exec.c
+++@@ -22,6 +22,27 @@ exec(char *path, char **argv)
+++   struct proghdr ph;
+++   pagetable_t pagetable = 0, oldpagetable;
+++   struct proc *p = myproc();
++++  
++++  
++++  
++++  // TP2 Act4.1.3
++++  
++++  // Sauvegarde
++++  struct vma * initial_stack_vma = p->stack_vma;
++++  struct vma * initial_heap_vma = p->heap_vma;
++++  struct vma * initial_memory_areas = p->memory_areas;
++++  
++++  // Réinitialisation
++++  
++++  p->memory_areas = 0;
++++  add_memory_area(p, 0, PGSIZE);
++++  
++++  p->stack_vma = 0;
++++  p->heap_vma = add_memory_area(p, 0, 0);
++++  
++++  //
++++  
++++  
+++ 
+++   begin_op(ROOTDEV);
+++ 
+++@@ -146,6 +167,8 @@ exec(char *path, char **argv)
+++   p->tf->sp = sp; // initial stack pointer
+++   proc_freepagetable(oldpagetable, oldsz);
+++ 
++++  free_vma(initial_memory_areas);
++++
+++   return argc; // this ends up in a0, the first argument to main(argc, argv)
+++ 
+++  bad:
+++@@ -155,9 +178,22 @@ exec(char *path, char **argv)
+++     iunlockput(ip);
+++     end_op(ROOTDEV);
+++   }
++++  
++++  //
++++  if(p->memory_areas)
++++  {
++++    free_vma(p->memory_areas);
++++  }
++++  p->stack_vma = initial_stack_vma;
++++  p->heap_vma = initial_heap_vma;
++++  p->memory_areas = initial_memory_areas;
++++  
++++  //
++++    
+++   return -1;
+++ }
+++ 
++++
+++ // Load a program segment into pagetable at virtual address va.
+++ // va must be page-aligned
+++ // and the pages from va to va+sz must already be mapped.
+++diff --git a/kernel/proc.c b/kernel/proc.c
+++index 31a6798..d9999e7 100644
+++--- a/kernel/proc.c
++++++ b/kernel/proc.c
+++@@ -338,6 +338,17 @@ void userinit(void) {
+++ 
+++   p = allocproc();
+++   initproc = p;
++++  
++++  
++++  // TP2 Act4.1.1
++++  
++++  
++++  add_memory_area(p, 0, PGSIZE);
++++  
++++  
++++  //
++++  
++++  
+++ 
+++   // allocate one user page and copy init's instructions
+++   // and data into it.
+++@@ -385,6 +396,15 @@ int fork(void) {
+++   if ((np = allocproc()) == 0) {
+++     return -1;
+++   }
++++  
++++  
++++  // TP2 Act4.1.2 
++++  
++++  // Recopie les VMAs du processus père vers le processus fils
++++  vma_copy(np, p);
++++  
++++ //
++++  
+++ 
+++   // Copy user memory from parent to child.
+++   if (uvmcopy(p->pagetable, np->pagetable, p->sz) < 0) {
++diff --git a/act4.11.diff b/act4.11.diff
++new file mode 100644
++index 0000000..7197f0b
++--- /dev/null
+++++ b/act4.11.diff
++@@ -0,0 +1,43 @@
+++diff --git a/kernel/vm.c b/kernel/vm.c
+++index 29a51c1..e8c8b7b 100644
+++--- a/kernel/vm.c
++++++ b/kernel/vm.c
+++@@ -390,7 +390,7 @@ int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr){
+++     void *physical_addr = kalloc();
+++     if (physical_addr == 0) {
+++       // kalloc failed. Impossible d’allouer une nouvelle page physique.
+++-      return ENOMEM;;
++++      return ENOMEM;
+++     }
+++     if(mappages(pagetable, addr, PGSIZE, (uint64)physical_addr, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+++       // mappages failed
+++@@ -408,9 +408,29 @@ int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr){
+++ }
+++ ///
+++ 
++++/// TP2 Act4.11
+++ int do_allocate_range(pagetable_t pagetable, struct proc* p, uint64 addr, uint64 len){
++++  if(len < 0)
++++    return -2;
++++
++++  int do_allocate_value;
++++  addr = PGROUNDDOWN(addr);
++++  uint64 addr_floor = addr;
++++  len = PGROUNDUP(len);
++++  for (; addr < addr_floor + len; addr += PGSIZE) {
++++    acquire(&p->vma_lock);
++++    if ((do_allocate_value = do_allocate(pagetable, p, addr)) != 0) {
++++      release(&p->vma_lock);
++++      // Something went wrong, deallocate previously allocated memory
++++      uvmdealloc(pagetable, addr, addr_floor);
++++      return do_allocate_value;
++++    }
++++    release(&p->vma_lock);
++++  }
++++
+++   return 0;
+++ }
++++///
+++ 
+++ // Copy from kernel to user.
+++ // Copy len bytes from src to virtual address dstva in a given page table.
++diff --git a/act4.12.diff b/act4.12.diff
++new file mode 100644
++index 0000000..18b8786
++--- /dev/null
+++++ b/act4.12.diff
++@@ -0,0 +1,162 @@
+++diff --git a/kernel/exec.c b/kernel/exec.c
+++index 81c06c2..13e32ed 100644
+++--- a/kernel/exec.c
++++++ b/kernel/exec.c
+++@@ -31,6 +31,7 @@ exec(char *path, char **argv)
+++   struct vma * initial_stack_vma = p->stack_vma;
+++   struct vma * initial_heap_vma = p->heap_vma;
+++   struct vma * initial_memory_areas = p->memory_areas;
++++  uint64 oldsz = max_addr_in_memory_areas(p); // TP2 Act4.12
+++ 
+++   // Réinitialisation
+++   p->memory_areas = 0;
+++@@ -105,7 +106,7 @@ exec(char *path, char **argv)
+++   ip = 0;
+++ 
+++   p = myproc();
+++-  uint64 oldsz = p->sz;
++++  //uint64 oldsz = p->sz; // TP2 Act4.12
+++ 
+++   // Allocate two pages at the next page boundary.
+++   // Use the second as the user stack.
+++@@ -172,7 +173,7 @@ exec(char *path, char **argv)
+++   // Commit to the user image.
+++   oldpagetable = p->pagetable;
+++   p->pagetable = pagetable;
+++-  p->sz = sz;
++++  //p->sz = sz; // TP2 Act4.12
+++   p->tf->epc = elf.entry;  // initial program counter = main
+++   p->tf->sp = sp; // initial stack pointer
+++   proc_freepagetable(oldpagetable, oldsz);
+++diff --git a/kernel/proc.c b/kernel/proc.c
+++index c591bab..969f50c 100644
+++--- a/kernel/proc.c
++++++ b/kernel/proc.c
+++@@ -272,7 +272,7 @@ static void freeproc(struct proc *p) {
+++     kfree((void *)p->tf);
+++   p->tf = 0;
+++   if (p->pagetable)
+++-    proc_freepagetable(p->pagetable, p->sz);
++++    proc_freepagetable(p->pagetable,/*p->sz*/ max_addr_in_memory_areas(p));
+++   if (p->cmd)
+++     bd_free(p->cmd);
+++   p->cmd = 0;
+++@@ -284,7 +284,7 @@ static void freeproc(struct proc *p) {
+++   p->memory_areas = 0;
+++   p->stack_vma = 0;
+++   p->heap_vma = 0;
+++-  p->sz = 0;
++++  //p->sz = 0; // TP2 Act4.12
+++   p->pid = 0;
+++   p->parent = 0;
+++   p->name[0] = 0;
+++@@ -353,7 +353,7 @@ void userinit(void) {
+++   // allocate one user page and copy init's instructions
+++   // and data into it.
+++   uvminit(p->pagetable, initcode, sizeof(initcode));
+++-  p->sz = PGSIZE;
++++  //p->sz = PGSIZE; // TP2 Act4.12
+++ 
+++   // prepare for the very first "return" from kernel to user.
+++   p->tf->epc = 0;     // user program counter
+++@@ -373,7 +373,7 @@ int growproc(long n) {
+++   uint64 sz;
+++   struct proc *p = myproc();
+++ 
+++-  sz = p->sz;
++++  sz = /* p->sz */ max_addr_in_memory_areas(p); // TP2 Act4.12
+++ 
+++ 
+++   if(n > 0){
+++@@ -388,13 +388,18 @@ int growproc(long n) {
+++       p->heap_vma->va_end = heap_old_end;
+++       return -1;
+++     }
+++-    sz = sz + n;
++++    //sz = sz + n; // TP2 Act4.12
+++     //
+++ 
+++   } else if(n < 0){
+++     sz = uvmdealloc(p->pagetable, sz, sz + n);
++++    if (sz < p->heap_vma->va_begin) {
++++      p->heap_vma->va_end = p->heap_vma->va_begin;
++++    } else {
++++      p->heap_vma->va_end = sz;
++++    }
+++   }
+++-  p->sz = sz;
++++  //p->sz = sz; // TP2 Act4.12;
+++   return 0;
+++ }
+++ 
+++@@ -420,12 +425,12 @@ int fork(void) {
+++ 
+++ 
+++   // Copy user memory from parent to child.
+++-  if (uvmcopy(p->pagetable, np->pagetable, p->sz) < 0) {
++++  if (uvmcopy(p->pagetable, np->pagetable, /*p->sz*/max_addr_in_memory_areas(p)) < 0) {
+++     freeproc(np);
+++     release(&np->lock);
+++     return -1;
+++   }
+++-  np->sz = p->sz;
++++  //np->sz = p->sz;  // TP2 Act4.12
+++ 
+++   np->parent = p;
+++ 
+++diff --git a/kernel/proc.h b/kernel/proc.h
+++index 30ef880..a0763b8 100644
+++--- a/kernel/proc.h
++++++ b/kernel/proc.h
+++@@ -144,7 +144,7 @@ struct proc {
+++ 
+++   // these are private to the process, so p->lock need not be held.
+++   uint64 kstack;               // Virtual address of kernel stack
+++-  uint64 sz;                   // Size of process memory (bytes)
++++  //uint64 sz;                   // Size of process memory (bytes)
+++   struct spinlock vma_lock;
+++   struct vma * memory_areas;   // VMAs du processus
+++   struct vma * stack_vma;      // Une VMA particulière pour la pile
+++diff --git a/kernel/syscall.c b/kernel/syscall.c
+++index d03d675..5ebaf7d 100644
+++--- a/kernel/syscall.c
++++++ b/kernel/syscall.c
+++@@ -12,7 +12,8 @@ int
+++ fetchaddr(uint64 addr, uint64 *ip)
+++ {
+++   struct proc *p = myproc();
+++-  if(addr >= p->sz || addr+sizeof(uint64) > p->sz)
++++  uint64 sz = max_addr_in_memory_areas(p); // TP2 Act4.12
++++  if(addr >= /*p->sz*/sz || addr+sizeof(uint64) > /*p->sz*/sz)
+++     return -1;
+++   if(copyin(p->pagetable, (char *)ip, addr, sizeof(*ip)) != 0)
+++     return -1;
+++diff --git a/kernel/sysproc.c b/kernel/sysproc.c
+++index 2b7454c..d9112b6 100644
+++--- a/kernel/sysproc.c
++++++ b/kernel/sysproc.c
+++@@ -46,7 +46,7 @@ sys_sbrk(void)
+++ 
+++   if(argaddr(0, &n) < 0)
+++     return -1;
+++-  addr = myproc()->sz;
++++  addr = /*myproc()->sz*/ max_addr_in_memory_areas(myproc());
+++   if(growproc((long)n) < 0)
+++     return -1;
+++   return addr;
+++diff --git a/kernel/vm.c b/kernel/vm.c
+++index e8c8b7b..a26ee23 100644
+++--- a/kernel/vm.c
++++++ b/kernel/vm.c
+++@@ -398,9 +398,8 @@ int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr){
+++       return EMAPFAILED;
+++     }
+++ 
+++-  }
+++-
+++-  if (!(*pte & PTE_U)) {
++++  } else if (!(*pte & PTE_U)) {
++++    // Page est déjà présente
+++     return EBADPERM;
+++   }
+++ 
++diff --git a/act4.3.diff b/act4.3.diff
++new file mode 100644
++index 0000000..d5f0433
++--- /dev/null
+++++ b/act4.3.diff
++@@ -0,0 +1,172 @@
+++diff --git a/kernel/exec.c b/kernel/exec.c
+++index 6038126..89f3b24 100644
+++--- a/kernel/exec.c
++++++ b/kernel/exec.c
+++@@ -22,27 +22,23 @@ exec(char *path, char **argv)
+++   struct proghdr ph;
+++   pagetable_t pagetable = 0, oldpagetable;
+++   struct proc *p = myproc();
+++-  
++++
+++   // TP2 Act4.1.3
+++-  
++++
+++   // Sauvegarde
+++   struct vma * initial_stack_vma = p->stack_vma;
+++   struct vma * initial_heap_vma = p->heap_vma;
+++   struct vma * initial_memory_areas = p->memory_areas;
+++-  
++++
+++   // Réinitialisation
+++-  
+++   p->memory_areas = 0;
+++-  add_memory_area(p, 0, PGSIZE);
+++-  
+++   p->stack_vma = 0;
+++-  p->heap_vma = add_memory_area(p, 0, 0);
+++-  
++++  p->heap_vma = 0;
+++   //
+++
+++ 
+++   begin_op(ROOTDEV);
+++ 
+++@@ -94,6 +90,15 @@ exec(char *path, char **argv)
+++       printf("exec: loadseg failed\n");
+++       goto bad;
+++     }
++++    ////
++++    acquire(&p->vma_lock);
++++    if (!get_memory_area(p, ph.vaddr)) {
++++      release(&p->vma_lock);
++++      add_memory_area(p, ph.vaddr, ph.vaddr + ph.memsz);
++++    } else {
++++      release(&p->vma_lock);
++++    }
++++    ////
+++   }
+++   iunlockput(ip);
+++   end_op(ROOTDEV);
+++@@ -113,6 +118,11 @@ exec(char *path, char **argv)
+++   sp = sz;
+++   stackbase = sp - PGSIZE;
+++ 
++++  /////
++++  p->stack_vma = add_memory_area(p, stackbase, sp+1);
++++  p->heap_vma = add_memory_area(p, sp+1, sp+1);
++++  /////
++++
+++   // Push argument strings, prepare rest of stack in ustack.
+++   for(argc = 0; argv[argc]; argc++) {
+++     if(argc >= MAXARG){
+++@@ -167,7 +177,12 @@ exec(char *path, char **argv)
+++   p->tf->sp = sp; // initial stack pointer
+++   proc_freepagetable(oldpagetable, oldsz);
+++ 
++++  ///
++++
++++
+++   free_vma(initial_memory_areas);
++++  ///
++++
+++ 
+++   return argc; // this ends up in a0, the first argument to main(argc, argv)
+++ 
+++@@ -178,7 +193,7 @@ exec(char *path, char **argv)
+++     iunlockput(ip);
+++     end_op(ROOTDEV);
+++   }
+++-  
++++
+++   //
+++   if(p->memory_areas)
+++   {
+++@@ -187,9 +202,9 @@ exec(char *path, char **argv)
+++   p->stack_vma = initial_stack_vma;
+++   p->heap_vma = initial_heap_vma;
+++   p->memory_areas = initial_memory_areas;
+++-  
++++
+++   //
+++-    
++++
+++   return -1;
+++ }
+++ 
+++@@ -218,6 +233,6 @@ loadseg(pagetable_t pagetable, uint64 va, struct inode *ip, uint offset, uint sz
+++     if(readi(ip, 0, (uint64)pa, offset+i, n) != n)
+++       return -1;
+++   }
+++-  
++++
+++   return 0;
+++ }
+++diff --git a/kernel/proc.c b/kernel/proc.c
+++index d9999e7..c591bab 100644
+++--- a/kernel/proc.c
++++++ b/kernel/proc.c
+++@@ -338,17 +338,17 @@ void userinit(void) {
+++ 
+++   p = allocproc();
+++   initproc = p;
+++-  
++++
+++   // TP2 Act4.1.1
+++-  
++++
+++   add_memory_area(p, 0, PGSIZE);
+++-  
++++
+++   //
+++-  
++++
+++ 
+++   // allocate one user page and copy init's instructions
+++   // and data into it.
+++@@ -374,10 +374,23 @@ int growproc(long n) {
+++   struct proc *p = myproc();
+++ 
+++   sz = p->sz;
++++
++++
+++   if(n > 0){
+++-    if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
++++    // if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
++++    //   return -1;
++++    // }
++++
++++    // TP2 Act4.3
++++    uint64 heap_old_end = p->heap_vma->va_end;
++++    p->heap_vma->va_end = heap_old_end + n;
++++    if ( !((p->heap_vma->va_begin <= p->heap_vma->va_end) && (p->heap_vma->va_end - p->heap_vma->va_begin < HEAP_THRESHOLD)) ) {
++++      p->heap_vma->va_end = heap_old_end;
+++       return -1;
+++     }
++++    sz = sz + n;
++++    //
++++
+++   } else if(n < 0){
+++     sz = uvmdealloc(p->pagetable, sz, sz + n);
+++   }
+++@@ -396,15 +409,15 @@ int fork(void) {
+++   if ((np = allocproc()) == 0) {
+++     return -1;
+++   }
+++-  
+++-  
+++-  // TP2 Act4.1.2 
+++-  
++++
++++
++++  // TP2 Act4.1.2
++++
+++   // Recopie les VMAs du processus père vers le processus fils
+++   vma_copy(np, p);
+++-  
++++
+++  //
+++-  
++++
+++ 
+++   // Copy user memory from parent to child.
+++   if (uvmcopy(p->pagetable, np->pagetable, p->sz) < 0) {
++diff --git a/act4.5.diff b/act4.5.diff
++new file mode 100644
++index 0000000..0e99aa8
++--- /dev/null
+++++ b/act4.5.diff
++@@ -0,0 +1,41 @@
+++diff --git a/kernel/vm.c b/kernel/vm.c
+++index ee6c99d..694e404 100644
+++--- a/kernel/vm.c
++++++ b/kernel/vm.c
+++@@ -138,7 +138,7 @@ kvmpa(uint64 va)
+++   uint64 off = va % PGSIZE;
+++   pte_t *pte;
+++   uint64 pa;
+++-  
++++
+++   pte = walk(kernel_pagetable, va, 0);
+++   if(pte == 0)
+++     panic("kvmpa");
+++@@ -345,7 +345,7 @@ void
+++ uvmclear(pagetable_t pagetable, uint64 va)
+++ {
+++   pte_t *pte;
+++-  
++++
+++   pte = walk(pagetable, va, 0);
+++   if(pte == 0)
+++     panic("uvmclear");
+++@@ -376,9 +376,18 @@ int load_from_file(char* file,
+++     return 0;
+++   }
+++ 
++++/// TP2 Act4.5
+++ int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr){
++++  pte_t *pte = walk(pagetable, addr, 0);
++++  if ( !( pte && (*pte & PTE_V) ) ) {
++++    return ENOMEM;
++++  }
++++  if (!(*pte & PTE_U)) {
++++    return EBADPERM;
++++  }
+++   return 0;
+++ }
++++///
+++ 
+++ int do_allocate_range(pagetable_t pagetable, struct proc* p, uint64 addr, uint64 len){
+++   return 0;
++diff --git a/act4.6.diff b/act4.6.diff
++new file mode 100644
++index 0000000..b461377
++--- /dev/null
+++++ b/act4.6.diff
++@@ -0,0 +1,122 @@
+++diff --git a/kernel/exec.c b/kernel/exec.c
+++index 89f3b24..81c06c2 100644
+++--- a/kernel/exec.c
++++++ b/kernel/exec.c
+++@@ -119,8 +119,8 @@ exec(char *path, char **argv)
+++   stackbase = sp - PGSIZE;
+++ 
+++   /////
+++-  p->stack_vma = add_memory_area(p, stackbase, sp+1);
+++-  p->heap_vma = add_memory_area(p, sp+1, sp+1);
++++  p->stack_vma = add_memory_area(p, stackbase, sp); // It is now corrected in Activite 4.6
++++  p->heap_vma = add_memory_area(p, sp, sp);
+++   /////
+++ 
+++   // Push argument strings, prepare rest of stack in ustack.
+++diff --git a/kernel/trap.c b/kernel/trap.c
+++index 1537634..1e21f73 100644
+++--- a/kernel/trap.c
++++++ b/kernel/trap.c
+++@@ -79,7 +79,7 @@ usertrap(void)
+++   w_stvec((uint64)kernelvec);
+++ 
+++   struct proc *p = myproc();
+++-  
++++
+++   // save user program counter.
+++   p->tf->epc = r_sepc();
+++ 
+++@@ -100,7 +100,7 @@ usertrap(void)
+++     intr_on();
+++ 
+++     syscall();
+++-  } else if (scause == 0xf || scause == 0xd) {
++++  } else if (scause == 0xf || scause == 0xd || scause == 0xc) {
+++     handle_page_fault(p, scause, r_stval(), r_sepc());
+++   } else if((which_dev = devintr()) != 0){
+++     // ok
+++@@ -144,7 +144,7 @@ usertrapret(void)
+++ 
+++   // set up the registers that trampoline.S's sret will use
+++   // to get to user space.
+++-  
++++
+++   // set S Previous Privilege mode to User.
+++   unsigned long x = r_sstatus();
+++   x &= ~SSTATUS_SPP; // clear SPP to 0 for user mode
+++@@ -157,7 +157,7 @@ usertrapret(void)
+++   // tell trampoline.S the user page table to switch to.
+++   uint64 satp = MAKE_SATP(p->pagetable);
+++ 
+++-  // jump to trampoline.S at the top of memory, which 
++++  // jump to trampoline.S at the top of memory, which
+++   // switches to the user page table, restores user registers,
+++   // and switches to user mode with sret.
+++   uint64 fn = TRAMPOLINE + (userret - trampoline);
+++@@ -166,14 +166,14 @@ usertrapret(void)
+++ 
+++ // interrupts and exceptions from kernel code go here via kernelvec,
+++ // on whatever the current kernel stack is.
+++-void 
++++void
+++ kerneltrap()
+++ {
+++   int which_dev = 0;
+++   uint64 sepc = r_sepc();
+++   uint64 sstatus = r_sstatus();
+++   uint64 scause = r_scause();
+++-  
++++
+++   if((sstatus & SSTATUS_SPP) == 0)
+++     panic("kerneltrap: not from supervisor mode");
+++   if(intr_get() != 0)
+++@@ -246,7 +246,7 @@ devintr()
+++     if(cpuid() == 0){
+++       clockintr();
+++     }
+++-    
++++
+++     // acknowledge the software interrupt by clearing
+++     // the SSIP bit in sip.
+++     w_sip(r_sip() & ~2);
+++diff --git a/kernel/vm.c b/kernel/vm.c
+++index 694e404..29a51c1 100644
+++--- a/kernel/vm.c
++++++ b/kernel/vm.c
+++@@ -376,15 +376,34 @@ int load_from_file(char* file,
+++     return 0;
+++   }
+++ 
+++-/// TP2 Act4.5
++++/// TP2 Act4.6
+++ int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr){
++++  // VMAs
++++  if (!get_memory_area(p, addr)) {
++++    return ENOVMA;
++++  }
++++
+++   pte_t *pte = walk(pagetable, addr, 0);
+++   if ( !( pte && (*pte & PTE_V) ) ) {
+++-    return ENOMEM;
++++    // Page n’est pas déjà présente
++++    addr = PGROUNDDOWN(addr);
++++    void *physical_addr = kalloc();
++++    if (physical_addr == 0) {
++++      // kalloc failed. Impossible d’allouer une nouvelle page physique.
++++      return ENOMEM;;
++++    }
++++    if(mappages(pagetable, addr, PGSIZE, (uint64)physical_addr, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
++++      // mappages failed
++++      kfree(physical_addr);
++++      return EMAPFAILED;
++++    }
++++
+++   }
++++
+++   if (!(*pte & PTE_U)) {
+++     return EBADPERM;
+++   }
++++
+++   return 0;
+++ }
+++ ///
++diff --git a/kernel/exec.c b/kernel/exec.c
++index 13e32ed..0a42204 100644
++--- a/kernel/exec.c
+++++ b/kernel/exec.c
++@@ -31,7 +31,7 @@ exec(char *path, char **argv)
++   struct vma * initial_stack_vma = p->stack_vma;
++   struct vma * initial_heap_vma = p->heap_vma;
++   struct vma * initial_memory_areas = p->memory_areas;
++-  uint64 oldsz = max_addr_in_memory_areas(p); // TP2 Act4.12
+++  uint64 oldsz = max_addr_in_memory_areas(p); // TP2 Act5.2
++ 
++   // Réinitialisation
++   p->memory_areas = 0;
++@@ -111,17 +111,23 @@ exec(char *path, char **argv)
++   // Allocate two pages at the next page boundary.
++   // Use the second as the user stack.
++   sz = PGROUNDUP(sz);
+++  /*
++   if((sz = uvmalloc(pagetable, sz, sz + 2*PGSIZE)) == 0){
++     printf("exec: uvmalloc failed for the stack\n");
++     goto bad;
++   }
++   uvmclear(pagetable, sz-2*PGSIZE);
++-  sp = sz;
++-  stackbase = sp - PGSIZE;
+++  */
+++  //sz = sz + 2*PGSIZE;
+++
+++  //sp = sz;
+++  //stackbase = sp - PGSIZE;
++ 
++   /////
+++  p->heap_vma = add_memory_area(p, sz, sz);
+++  sp = USTACK_TOP;
+++  stackbase = USTACK_BOTTOM;
++   p->stack_vma = add_memory_area(p, stackbase, sp); // It is now corrected in Activite 4.6
++-  p->heap_vma = add_memory_area(p, sp, sp);
++   /////
++ 
++   // Push argument strings, prepare rest of stack in ustack.
++@@ -188,8 +194,10 @@ exec(char *path, char **argv)
++   return argc; // this ends up in a0, the first argument to main(argc, argv)
++ 
++  bad:
++-  if(pagetable)
+++  if(pagetable) {
+++    sz = max_addr_in_memory_areas(p); // TP2 Act5.2
++     proc_freepagetable(pagetable, sz);
+++  }
++   if(ip){
++     iunlockput(ip);
++     end_op(ROOTDEV);
++diff --git a/kernel/memlayout.h b/kernel/memlayout.h
++index d5a2f9a..5a741ca 100644
++--- a/kernel/memlayout.h
+++++ b/kernel/memlayout.h
++@@ -9,8 +9,8 @@
++ // 00001000 -- boot ROM, provided by qemu
++ // 02000000 -- CLINT
++ // 0C000000 -- PLIC
++-// 10000000 -- uart0 
++-// 10001000 -- virtio disk 
+++// 10000000 -- uart0
+++// 10001000 -- virtio disk
++ // 80000000 -- boot ROM jumps here in machine mode
++ //             -kernel loads the kernel here
++ // unused RAM after 80000000.
++diff --git a/kernel/proc.c b/kernel/proc.c
++index 969f50c..b1f5091 100644
++--- a/kernel/proc.c
+++++ b/kernel/proc.c
++@@ -272,7 +272,7 @@ static void freeproc(struct proc *p) {
++     kfree((void *)p->tf);
++   p->tf = 0;
++   if (p->pagetable)
++-    proc_freepagetable(p->pagetable,/*p->sz*/ max_addr_in_memory_areas(p));
+++    proc_freepagetable(p->pagetable,/*p->sz*/ max_addr_in_memory_areas(p) );
++   if (p->cmd)
++     bd_free(p->cmd);
++   p->cmd = 0;
++@@ -373,7 +373,7 @@ int growproc(long n) {
++   uint64 sz;
++   struct proc *p = myproc();
++ 
++-  sz = /* p->sz */ max_addr_in_memory_areas(p); // TP2 Act4.12
+++  sz = /* p->sz */ (p->heap_vma) ? p->heap_vma->va_end : max_addr_in_memory_areas(p); // TP2 Act5.2
++ 
++ 
++   if(n > 0){
++@@ -425,7 +425,7 @@ int fork(void) {
++ 
++ 
++   // Copy user memory from parent to child.
++-  if (uvmcopy(p->pagetable, np->pagetable, /*p->sz*/max_addr_in_memory_areas(p)) < 0) {
+++  if (uvmcopy(p->pagetable, np->pagetable, max_addr_in_memory_areas(p) ) < 0) {
++     freeproc(np);
++     release(&np->lock);
++     return -1;
++diff --git a/kernel/syscall.c b/kernel/syscall.c
++index 5ebaf7d..0614497 100644
++--- a/kernel/syscall.c
+++++ b/kernel/syscall.c
++@@ -12,7 +12,7 @@ int
++ fetchaddr(uint64 addr, uint64 *ip)
++ {
++   struct proc *p = myproc();
++-  uint64 sz = max_addr_in_memory_areas(p); // TP2 Act4.12
+++  uint64 sz = max_addr_in_memory_areas(p); // TP2 Act5.2
++   if(addr >= /*p->sz*/sz || addr+sizeof(uint64) > /*p->sz*/sz)
++     return -1;
++   if(copyin(p->pagetable, (char *)ip, addr, sizeof(*ip)) != 0)
++diff --git a/kernel/sysproc.c b/kernel/sysproc.c
++index d9112b6..99685b0 100644
++--- a/kernel/sysproc.c
+++++ b/kernel/sysproc.c
++@@ -46,7 +46,8 @@ sys_sbrk(void)
++ 
++   if(argaddr(0, &n) < 0)
++     return -1;
++-  addr = /*myproc()->sz*/ max_addr_in_memory_areas(myproc());
+++  struct proc *p = myproc();  
+++  addr = /*myproc()->sz*/ (p->heap_vma) ? p->heap_vma->va_end : max_addr_in_memory_areas(p); // TP2 Act5.2
++   if(growproc((long)n) < 0)
++     return -1;
++   return addr;
++diff --git a/user/usertests.c b/user/usertests.c
++index f1f011e..3c99519 100644
++--- a/user/usertests.c
+++++ b/user/usertests.c
++@@ -142,7 +142,7 @@ writetest(char *s)
++   int fd;
++   int i;
++   enum { N=100, SZ=10 };
++-  
+++
++   fd = open("small", O_CREATE|O_RDWR);
++   if(fd < 0){
++     printf("%s: error: creat small failed!\n", s);
++@@ -342,7 +342,7 @@ pipe1(char *s)
++   int fds[2], pid, xstatus;
++   int seq, i, n, cc, total;
++   enum { N=5, SZ=1033 };
++-  
+++
++   if(pipe(fds) != 0){
++     printf("%s: pipe() failed\n", s);
++     exit(1);
++@@ -536,7 +536,7 @@ void
++ forkfork(char *s)
++ {
++   enum { N=2 };
++-  
+++
++   for(int i = 0; i < N; i++){
++     int pid = fork();
++     if(pid < 0){
++@@ -688,7 +688,7 @@ sharedfd(char *s)
++     if(xstatus != 0)
++       exit(xstatus);
++   }
++-  
+++
++   close(fd);
++   fd = open("sharedfd", 0);
++   if(fd < 0){
++@@ -723,7 +723,7 @@ fourfiles(char *s)
++   char *names[] = { "f0", "f1", "f2", "f3" };
++   char *fname;
++   enum { N=12, NCHILD=4, SZ=500 };
++-  
+++
++   for(pi = 0; pi < NCHILD; pi++){
++     fname = names[pi];
++     unlink(fname);
++@@ -1715,7 +1715,7 @@ sbrkfail(char *s)
++   char *c, *a;
++   int pids[10];
++   int pid;
++- 
+++
++   if(pipe(fds) != 0){
++     printf("%s: pipe() failed\n", s);
++     exit(1);
++@@ -1746,7 +1746,7 @@ sbrkfail(char *s)
++     exit(1);
++   }
++ 
++-  // test running fork with the above allocated page 
+++  // test running fork with the above allocated page
++   pid = fork();
++   if(pid < 0){
++     printf("%s: fork failed\n", s);
++@@ -1768,7 +1768,7 @@ sbrkfail(char *s)
++     exit(1);
++ }
++ 
++-  
+++
++ // test reads/writes from/to allocated memory
++ void
++ sbrkarg(char *s)
++@@ -1794,7 +1794,7 @@ sbrkarg(char *s)
++   if(pipe((int *) a) != 0){
++     printf("%s: pipe() failed\n", s);
++     exit(1);
++-  } 
+++  }
++ }
++ 
++ void
++@@ -1857,7 +1857,7 @@ bigargtest(char *s)
++     printf("%s: bigargtest: fork failed\n", s);
++     exit(1);
++   }
++-  
+++
++   wait(&xstatus);
++   if(xstatus != 0)
++     exit(xstatus);
++@@ -1949,7 +1949,7 @@ stacktest(char *s)
++ {
++   int pid;
++   int xstatus;
++-  
+++
++   pid = fork();
++   if(pid == 0) {
++     char *sp = (char *) r_sp();
++@@ -2050,7 +2050,7 @@ void
++ badwrite(char *s)
++ {
++   int assumed_free = 600;
++-  
+++
++   unlink("junk");
++   for(int i = 0; i < assumed_free; i++){
++     int fd = open("junk", O_CREATE|O_WRONLY);
++@@ -2089,7 +2089,7 @@ badarg(char *s)
++     argv[1] = 0;
++     exec("echo", argv);
++   }
++-  
+++
++   exit(0);
++ }
++ 
++@@ -2099,7 +2099,7 @@ int
++ run(void f(char *), char *s) {
++   int pid;
++   int xstatus;
++-  
+++
++   printf("test %s: ", s);
++   fflush(1);
++   if((pid = fork()) < 0) {
++@@ -2111,7 +2111,7 @@ run(void f(char *), char *s) {
++     exit(0);
++   } else {
++     wait(&xstatus);
++-    if(xstatus != 0) 
+++    if(xstatus != 0)
++       printf("FAILED\n", s);
++     else
++       printf("OK\n", s);
++@@ -2126,7 +2126,7 @@ main(int argc, char *argv[])
++   if(argc > 1) {
++     n = argv[1];
++   }
++-  
+++
++   struct test {
++     void (*f)(char *);
++     char *s;
++@@ -2181,7 +2181,7 @@ main(int argc, char *argv[])
++     {bigdir, "bigdir", 0}, // slow
++     { 0, 0, 0},
++   };
++-    
+++
++   printf("usertests starting\n");
++ 
++   /* if(open("usertests.ran", 0) >= 0){ */
+diff --git a/act5.4.diff b/act5.4.diff
+new file mode 100644
+index 0000000..9b5775f
+--- /dev/null
++++ b/act5.4.diff
+@@ -0,0 +1,13 @@
++diff --git a/kernel/memlayout.h b/kernel/memlayout.h
++index 5a741ca..be0759e 100644
++--- a/kernel/memlayout.h
+++++ b/kernel/memlayout.h
++@@ -73,7 +73,7 @@
++ #define HEAP_THRESHOLD (8*1024*1024)
++ 
++ #define USTACK_BOTTOM (256*1024*1024)
++-#define USTACK_LIMIT (4 * 1024)
+++#define USTACK_LIMIT (4 * 1024 * 2)
++ #define USTACK_TOP (USTACK_BOTTOM + USTACK_LIMIT)
++ 
++ #endif
+diff --git a/act6.3.diff b/act6.3.diff
+new file mode 100644
+index 0000000..bfbd05b
+--- /dev/null
++++ b/act6.3.diff
+@@ -0,0 +1,16 @@
++diff --git a/kernel/exec.c b/kernel/exec.c
++index 0a42204..2bb2a5e 100644
++--- a/kernel/exec.c
+++++ b/kernel/exec.c
++@@ -125,9 +125,11 @@ exec(char *path, char **argv)
++ 
++   /////
++   p->heap_vma = add_memory_area(p, sz, sz);
+++  p->heap_vma->vma_flags = VMA_R | VMA_W;
++   sp = USTACK_TOP;
++   stackbase = USTACK_BOTTOM;
++   p->stack_vma = add_memory_area(p, stackbase, sp); // It is now corrected in Activite 4.6
+++  p->stack_vma->vma_flags = VMA_R | VMA_W;
++   /////
++ 
++   // Push argument strings, prepare rest of stack in ustack.
+diff --git a/kernel/defs.h b/kernel/defs.h
+index 0ae9b48..4ce9043 100644
+--- a/kernel/defs.h
++++ b/kernel/defs.h
+@@ -191,7 +191,7 @@ void            plicinithart(void);
+ int             plic_claim(void);
+ void            plic_complete(int);
+ 
+-int do_allocate(pagetable_t pagetable, struct proc*, uint64 addr);
++int do_allocate(pagetable_t pagetable, struct proc*, uint64 addr, uint64 scause);
+ 
+ // virtio_disk.c
+ void            virtio_disk_init(int);
+diff --git a/kernel/trap.c b/kernel/trap.c
+index 1e21f73..d549ce8 100644
+--- a/kernel/trap.c
++++ b/kernel/trap.c
+@@ -38,7 +38,7 @@ int handle_page_fault(struct proc* p, uint64 scause, uint64 stval, uint64 sepc){
+   acquire(&p->vma_lock);
+   printf("handle_page_fault pid=%d (%s), scause=%p, stval=%p, sepc=%p\n", p->pid, p->name, scause, stval, sepc);
+   // proc_vmprint(p);
+-  int flags = do_allocate(p->pagetable, p, addr);
++  int flags = do_allocate(p->pagetable, p, addr, scause);
+   release(&p->vma_lock);
+   if(flags < 0){
+     if(flags == ENOVMA){
+diff --git a/kernel/vm.c b/kernel/vm.c
+index a26ee23..c0b22b0 100644
+--- a/kernel/vm.c
++++ b/kernel/vm.c
+@@ -377,7 +377,7 @@ int load_from_file(char* file,
+   }
+ 
+ /// TP2 Act4.6
+-int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr){
++int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr, uint64 scause){
+   // VMAs
+   if (!get_memory_area(p, addr)) {
+     return ENOVMA;
+@@ -408,7 +408,7 @@ int do_allocate(pagetable_t pagetable, struct proc* p, uint64 addr){
+ ///
+ 
+ /// TP2 Act4.11
+-int do_allocate_range(pagetable_t pagetable, struct proc* p, uint64 addr, uint64 len){
++int do_allocate_range(pagetable_t pagetable, struct proc* p, uint64 addr, uint64 len, uint64 scause){
+   if(len < 0)
+     return -2;
+ 
+@@ -418,7 +418,7 @@ int do_allocate_range(pagetable_t pagetable, struct proc* p, uint64 addr, uint64
+   len = PGROUNDUP(len);
+   for (; addr < addr_floor + len; addr += PGSIZE) {
+     acquire(&p->vma_lock);
+-    if ((do_allocate_value = do_allocate(pagetable, p, addr)) != 0) {
++    if ((do_allocate_value = do_allocate(pagetable, p, addr, scause)) != 0) {
+       release(&p->vma_lock);
+       // Something went wrong, deallocate previously allocated memory
+       uvmdealloc(pagetable, addr, addr_floor);
+@@ -439,7 +439,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
+ {
+   uint64 n, va0, pa0;
+ 
+-  int f = do_allocate_range(pagetable, myproc(), dstva, len);
++  int f = do_allocate_range(pagetable, myproc(), dstva, len, CAUSE_R);
+   if(f < 0) return -1;
+ 
+   while(len > 0){
+@@ -467,7 +467,7 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
+ {
+   uint64 n, va0, pa0;
+ 
+-  int f = do_allocate_range(pagetable, myproc(), srcva, len);
++  int f = do_allocate_range(pagetable, myproc(), srcva, len, CAUSE_W );
+   if(f < 0) return -1;
+ 
+   while(len > 0){
+@@ -500,7 +500,7 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
+   acquire(&myproc()->vma_lock);
+   while(got_null == 0 && max > 0){
+     va0 = PGROUNDDOWN(srcva);
+-    int f = do_allocate(pagetable, myproc(), srcva);
++    int f = do_allocate(pagetable, myproc(), srcva, CAUSE_W);
+     if(f < 0) {
+       release(&myproc()->vma_lock);
+      return -1;
