@@ -46,7 +46,8 @@ sys_sbrk(void)
 
   if(argaddr(0, &n) < 0)
     return -1;
-  addr = /*myproc()->sz*/ max_addr_in_memory_areas(myproc());
+  struct proc *p = myproc();  
+  addr = /*myproc()->sz*/ (p->heap_vma) ? p->heap_vma->va_end : max_addr_in_memory_areas(p); // TP2 Act5.2
   if(growproc((long)n) < 0)
     return -1;
   return addr;

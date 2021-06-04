@@ -142,7 +142,7 @@ writetest(char *s)
   int fd;
   int i;
   enum { N=100, SZ=10 };
-  
+
   fd = open("small", O_CREATE|O_RDWR);
   if(fd < 0){
     printf("%s: error: creat small failed!\n", s);
@@ -342,7 +342,7 @@ pipe1(char *s)
   int fds[2], pid, xstatus;
   int seq, i, n, cc, total;
   enum { N=5, SZ=1033 };
-  
+
   if(pipe(fds) != 0){
     printf("%s: pipe() failed\n", s);
     exit(1);
@@ -536,7 +536,7 @@ void
 forkfork(char *s)
 {
   enum { N=2 };
-  
+
   for(int i = 0; i < N; i++){
     int pid = fork();
     if(pid < 0){
@@ -688,7 +688,7 @@ sharedfd(char *s)
     if(xstatus != 0)
       exit(xstatus);
   }
-  
+
   close(fd);
   fd = open("sharedfd", 0);
   if(fd < 0){
@@ -723,7 +723,7 @@ fourfiles(char *s)
   char *names[] = { "f0", "f1", "f2", "f3" };
   char *fname;
   enum { N=12, NCHILD=4, SZ=500 };
-  
+
   for(pi = 0; pi < NCHILD; pi++){
     fname = names[pi];
     unlink(fname);
@@ -1715,7 +1715,7 @@ sbrkfail(char *s)
   char *c, *a;
   int pids[10];
   int pid;
- 
+
   if(pipe(fds) != 0){
     printf("%s: pipe() failed\n", s);
     exit(1);
@@ -1746,7 +1746,7 @@ sbrkfail(char *s)
     exit(1);
   }
 
-  // test running fork with the above allocated page 
+  // test running fork with the above allocated page
   pid = fork();
   if(pid < 0){
     printf("%s: fork failed\n", s);
@@ -1768,7 +1768,7 @@ sbrkfail(char *s)
     exit(1);
 }
 
-  
+
 // test reads/writes from/to allocated memory
 void
 sbrkarg(char *s)
@@ -1794,7 +1794,7 @@ sbrkarg(char *s)
   if(pipe((int *) a) != 0){
     printf("%s: pipe() failed\n", s);
     exit(1);
-  } 
+  }
 }
 
 void
@@ -1857,7 +1857,7 @@ bigargtest(char *s)
     printf("%s: bigargtest: fork failed\n", s);
     exit(1);
   }
-  
+
   wait(&xstatus);
   if(xstatus != 0)
     exit(xstatus);
@@ -1949,7 +1949,7 @@ stacktest(char *s)
 {
   int pid;
   int xstatus;
-  
+
   pid = fork();
   if(pid == 0) {
     char *sp = (char *) r_sp();
@@ -2050,7 +2050,7 @@ void
 badwrite(char *s)
 {
   int assumed_free = 600;
-  
+
   unlink("junk");
   for(int i = 0; i < assumed_free; i++){
     int fd = open("junk", O_CREATE|O_WRONLY);
@@ -2089,7 +2089,7 @@ badarg(char *s)
     argv[1] = 0;
     exec("echo", argv);
   }
-  
+
   exit(0);
 }
 
@@ -2099,7 +2099,7 @@ int
 run(void f(char *), char *s) {
   int pid;
   int xstatus;
-  
+
   printf("test %s: ", s);
   fflush(1);
   if((pid = fork()) < 0) {
@@ -2111,7 +2111,7 @@ run(void f(char *), char *s) {
     exit(0);
   } else {
     wait(&xstatus);
-    if(xstatus != 0) 
+    if(xstatus != 0)
       printf("FAILED\n", s);
     else
       printf("OK\n", s);
@@ -2126,7 +2126,7 @@ main(int argc, char *argv[])
   if(argc > 1) {
     n = argv[1];
   }
-  
+
   struct test {
     void (*f)(char *);
     char *s;
@@ -2181,7 +2181,7 @@ main(int argc, char *argv[])
     {bigdir, "bigdir", 0}, // slow
     { 0, 0, 0},
   };
-    
+
   printf("usertests starting\n");
 
   /* if(open("usertests.ran", 0) >= 0){ */

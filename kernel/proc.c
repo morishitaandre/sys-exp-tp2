@@ -272,7 +272,7 @@ static void freeproc(struct proc *p) {
     kfree((void *)p->tf);
   p->tf = 0;
   if (p->pagetable)
-    proc_freepagetable(p->pagetable,/*p->sz*/ max_addr_in_memory_areas(p));
+    proc_freepagetable(p->pagetable,/*p->sz*/ max_addr_in_memory_areas(p) );
   if (p->cmd)
     bd_free(p->cmd);
   p->cmd = 0;
@@ -373,7 +373,7 @@ int growproc(long n) {
   uint64 sz;
   struct proc *p = myproc();
 
-  sz = /* p->sz */ max_addr_in_memory_areas(p); // TP2 Act4.12
+  sz = /* p->sz */ (p->heap_vma) ? p->heap_vma->va_end : max_addr_in_memory_areas(p); // TP2 Act5.2
 
 
   if(n > 0){
@@ -425,7 +425,7 @@ int fork(void) {
 
 
   // Copy user memory from parent to child.
-  if (uvmcopy(p->pagetable, np->pagetable, /*p->sz*/max_addr_in_memory_areas(p)) < 0) {
+  if (uvmcopy(p->pagetable, np->pagetable, max_addr_in_memory_areas(p) ) < 0) {
     freeproc(np);
     release(&np->lock);
     return -1;

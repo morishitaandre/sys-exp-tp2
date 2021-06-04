@@ -31,7 +31,7 @@ exec(char *path, char **argv)
   struct vma * initial_stack_vma = p->stack_vma;
   struct vma * initial_heap_vma = p->heap_vma;
   struct vma * initial_memory_areas = p->memory_areas;
-  uint64 oldsz = max_addr_in_memory_areas(p); // TP2 Act4.12
+  uint64 oldsz = max_addr_in_memory_areas(p); // TP2 Act5.2
 
   // Réinitialisation
   p->memory_areas = 0;
@@ -111,17 +111,23 @@ exec(char *path, char **argv)
   // Allocate two pages at the next page boundary.
   // Use the second as the user stack.
   sz = PGROUNDUP(sz);
+  /*
   if((sz = uvmalloc(pagetable, sz, sz + 2*PGSIZE)) == 0){
     printf("exec: uvmalloc failed for the stack\n");
     goto bad;
   }
   uvmclear(pagetable, sz-2*PGSIZE);
-  sp = sz;
-  stackbase = sp - PGSIZE;
+  */
+  //sz = sz + 2*PGSIZE;
+
+  //sp = sz;
+  //stackbase = sp - PGSIZE;
 
   /////
+  p->heap_vma = add_memory_area(p, sz, sz);
+  sp = USTACK_TOP;
+  stackbase = USTACK_BOTTOM;
   p->stack_vma = add_memory_area(p, stackbase, sp); // It is now corrected in Activite 4.6
-  p->heap_vma = add_memory_area(p, sp, sp);
   /////
 
   // Push argument strings, prepare rest of stack in ustack.
@@ -188,8 +194,10 @@ exec(char *path, char **argv)
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
  bad:
-  if(pagetable)
+  if(pagetable) {
+    sz = max_addr_in_memory_areas(p); // TP2 Act5.2
     proc_freepagetable(pagetable, sz);
+  }
   if(ip){
     iunlockput(ip);
     end_op(ROOTDEV);
