@@ -1,0 +1,13 @@
+diff --git a/kernel/memlayout.h b/kernel/memlayout.h
+index 5a741ca..be0759e 100644
+--- a/kernel/memlayout.h
++++ b/kernel/memlayout.h
+@@ -73,7 +73,7 @@
+ #define HEAP_THRESHOLD (8*1024*1024)
+ 
+ #define USTACK_BOTTOM (256*1024*1024)
+-#define USTACK_LIMIT (4 * 1024)
++#define USTACK_LIMIT (4 * 1024 * 2)
+ #define USTACK_TOP (USTACK_BOTTOM + USTACK_LIMIT)
+ 
+ #endif
